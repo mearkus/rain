@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f1e28">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>A Gentle Rain</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div id="ui-top">
+    <span id="deck-count">Deck: 27</span>
+    <span id="game-title">A Gentle Rain</span>
+    <div id="ui-top-actions">
+      <button id="help-btn" aria-label="How to play">?</button>
+      <button id="new-game-btn">New</button>
+    </div>
+  </div>
+
+  <!-- Game board -->
+  <div id="board-viewport">
+    <div id="board"></div>
+  </div>
+
+  <!-- Bottom bar: current tile preview + token rack -->
+  <div id="ui-bottom">
+    <div id="current-tile-area">
+      <div id="current-tile-label">Next</div>
+      <div id="current-tile-container"></div>
+    </div>
+    <div id="score">Score: 0</div>
+    <div id="token-rack"></div>
+  </div>
+
+  <!-- Win / end overlay -->
+  <div id="overlay" class="hidden" role="dialog" aria-modal="true">
+    <div id="overlay-content">
+      <h2 id="overlay-title"></h2>
+      <p id="overlay-message"></p>
+      <button id="play-again-btn">Play Again</button>
+    </div>
+  </div>
+
+  <!-- Help modal -->
+  <div id="help-modal" class="hidden" role="dialog" aria-modal="true">
+    <div id="help-content">
+      <h2>How to Play</h2>
+      <ul>
+        <li>Each turn you draw a tile. Tap a <strong>highlighted spot</strong> on the board to place it.</li>
+        <li>All touching edges must show the <strong>same flower colour</strong>.</li>
+        <li>Tiles with no valid placement are automatically discarded.</li>
+        <li>When four tiles form a <strong>2×2 square</strong>, a blossom token blooms at their corner — if you still have a matching flower token, it is claimed.</li>
+        <li>Claim all <strong>8 tokens</strong> to win! The fewer cards remain in the deck, the higher your score.</li>
+        <li>The game ends when the deck runs out.</li>
+      </ul>
+      <button id="help-close">Got it</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
