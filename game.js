@@ -3,19 +3,46 @@
 const TILE_SIZE = 72;
 const BOARD_PADDING = 72;
 
-// 28 tiles, each [top, right, bottom, left], flowers 0-7
+// 28 tiles, each [top, right, bottom, left], flowers 0-7.
+// Every tile has 4 UNIQUE edge values.
+// Built from 6 rotation-groups of 4 + 4 bridge tiles:
+//   each flower appears exactly 14 times total, 3-4 times per side.
 const TILES = [
-  // 8 uniform tiles
-  [0,0,0,0], [1,1,1,1], [2,2,2,2], [3,3,3,3],
-  [4,4,4,4], [5,5,5,5], [6,6,6,6], [7,7,7,7],
-  // 8 horizontal-stripe tiles (top/bottom = A, left/right = B)
-  [0,1,0,1], [2,3,2,3], [4,5,4,5], [6,7,6,7],
-  [0,2,0,2], [1,3,1,3], [4,6,4,6], [5,7,5,7],
-  // 8 vertical-stripe tiles (top/bottom = B, left/right = A)
-  [1,0,1,0], [3,2,3,2], [5,4,5,4], [7,6,7,6],
-  [2,0,2,0], [3,1,3,1], [6,4,6,4], [7,5,7,5],
-  // 4 cross tiles (all edges different)
-  [0,1,2,3], [4,5,6,7], [1,2,3,4], [5,6,7,0],
+  // Group 1 — {0,1,2,3} rotations
+  [0, 1, 2, 3],  //  0
+  [1, 2, 3, 0],  //  1
+  [2, 3, 0, 1],  //  2
+  [3, 0, 1, 2],  //  3
+  // Group 2 — {4,5,6,7} rotations
+  [4, 5, 6, 7],  //  4
+  [5, 6, 7, 4],  //  5
+  [6, 7, 4, 5],  //  6
+  [7, 4, 5, 6],  //  7
+  // Group 3 — {0,1,4,5} rotations
+  [0, 1, 4, 5],  //  8
+  [1, 4, 5, 0],  //  9
+  [4, 5, 0, 1],  // 10
+  [5, 0, 1, 4],  // 11
+  // Group 4 — {2,3,6,7} rotations
+  [2, 3, 6, 7],  // 12
+  [3, 6, 7, 2],  // 13
+  [6, 7, 2, 3],  // 14
+  [7, 2, 3, 6],  // 15
+  // Group 5 — {0,2,4,6} rotations
+  [0, 2, 4, 6],  // 16
+  [2, 4, 6, 0],  // 17
+  [4, 6, 0, 2],  // 18
+  [6, 0, 2, 4],  // 19
+  // Group 6 — {1,3,5,7} rotations
+  [1, 3, 5, 7],  // 20
+  [3, 5, 7, 1],  // 21
+  [5, 7, 1, 3],  // 22
+  [7, 1, 3, 5],  // 23
+  // Bridge tiles — fill gaps so every flower hits exactly 14 total
+  [0, 2, 5, 7],  // 24  {0,2,5,7}
+  [1, 3, 4, 6],  // 25  {1,3,4,6}
+  [3, 7, 0, 4],  // 26  {0,3,4,7}
+  [2, 6, 1, 5],  // 27  {1,2,5,6}
 ];
 
 const FLOWER_COLORS = [
