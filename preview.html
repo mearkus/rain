@@ -4,18 +4,18 @@
   <meta charset="UTF-8">
   <title>Tile Preview</title>
   <style>
-    body { background: #050508; margin: 0; padding: 20px; font-family: monospace; color: #00f5ff; }
-    h2 { font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: #9b5de5; margin: 20px 0 8px; }
-    .grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
-    .tile-wrap { width: 72px; height: 72px; border-radius: 3px; overflow: hidden;
-      border: 1px solid rgba(0,245,255,0.18);
-      box-shadow: 0 0 12px rgba(0,0,0,0.8), 0 0 5px rgba(0,245,255,0.12); }
-    .label { font-size: 9px; color: #3a3a6a; margin-top: 2px; text-align: center; }
+    body { background:#050508; margin:0; padding:20px; font-family:monospace; color:#00f5ff; }
+    h2 { font-size:11px; letter-spacing:0.2em; text-transform:uppercase; color:#9b5de5; margin:20px 0 8px; }
+    .grid { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:24px; }
+    .tile-wrap { width:72px; height:72px; border-radius:3px; overflow:hidden;
+      border:1px solid rgba(0,245,255,0.18);
+      box-shadow:0 0 12px rgba(0,0,0,.8),0 0 5px rgba(0,245,255,.12); }
+    .label { font-size:9px; color:#3a3a6a; margin-top:2px; text-align:center; }
   </style>
 </head>
 <body>
 <script>
-const TILES = [
+const TILES=[
   [0,1,2,3],[1,2,3,0],[2,3,0,1],[3,0,1,2],
   [4,5,6,7],[5,6,7,4],[6,7,4,5],[7,4,5,6],
   [0,1,4,5],[1,4,5,0],[4,5,0,1],[5,0,1,4],
@@ -24,122 +24,77 @@ const TILES = [
   [1,3,5,7],[3,5,7,1],[5,7,1,3],[7,1,3,5],
   [0,2,5,7],[1,3,4,6],[3,7,0,4],[2,6,1,5],
 ];
-
-const FLOWER_COLORS = [
-  '#ff006e','#4d9fff','#00f5ff','#f700ff',
-  '#9b5de5','#39ff14','#ff6b00','#ffe600',
+const FLOWER_COLORS=['#ff006e','#4d9fff','#00f5ff','#f700ff','#9b5de5','#39ff14','#ff6b00','#ffe600'];
+const FLOWER_NAMES=['Rose','Iris','Lotus','Cherry','Plum','Lily','Orchid','Peony'];
+const TRACE_DIRS=[
+  [50,37,50,12,  50, 6.5,8,5],
+  [61,50,88,50,  93.5,50,5,8],
+  [50,63,50,88,  50,93.5,8,5],
+  [39,50,12,50,   6.5,50,5,8],
 ];
-const FLOWER_NAMES = ['Rose','Iris','Lotus','Cherry','Plum','Lily','Orchid','Peony'];
 
-const PETAL_PATHS = [
-  'M 50,50 C 25,38 25,9 50,5 C 75,9 75,38 50,50 Z',
-  'M 50,50 C 62,25 91,25 95,50 C 91,75 62,75 50,50 Z',
-  'M 50,50 C 75,62 75,91 50,95 C 25,91 25,62 50,50 Z',
-  'M 50,50 C 38,75 9,75 5,50 C 9,25 38,25 50,50 Z',
-];
-const PETAL_GRAD_CX = ['50%','95%','50%','5%'];
-const PETAL_GRAD_CY = ['5%','50%','95%','50%'];
+function lcg(seed){let s=(seed*1664525+1013904223)>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/0x100000000;};}
+function el(ns,tag,attrs){const e=document.createElementNS(ns,tag);for(const[k,v]of Object.entries(attrs))e.setAttribute(k,v);return e;}
 
-let uid = 0;
-
-function makeTile(edges) {
-  const ns = 'http://www.w3.org/2000/svg';
-  const u  = uid++;
-  const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox','0 0 100 100');
-  svg.setAttribute('width','100%');
-  svg.setAttribute('height','100%');
-  svg.style.display = 'block';
-
-  const defs = document.createElementNS(ns, 'defs');
-  for (let i = 0; i < 4; i++) {
-    const c = FLOWER_COLORS[edges[i]];
-    const g = document.createElementNS(ns, 'radialGradient');
-    g.setAttribute('id',`rg${u}_${i}`);
-    g.setAttribute('cx', PETAL_GRAD_CX[i]);
-    g.setAttribute('cy', PETAL_GRAD_CY[i]);
-    g.setAttribute('r','72%');
-    const s1 = document.createElementNS(ns,'stop');
-    s1.setAttribute('offset','0%'); s1.setAttribute('stop-color',c); s1.setAttribute('stop-opacity','1');
-    const s2 = document.createElementNS(ns,'stop');
-    s2.setAttribute('offset','100%'); s2.setAttribute('stop-color',c); s2.setAttribute('stop-opacity','0.45');
-    g.append(s1,s2); defs.appendChild(g);
+function addPCBCorners(svg,ns,seed){
+  const rng=lcg(seed);
+  const corners=[{x:7,y:7,w:30,h:28},{x:63,y:7,w:30,h:28},{x:7,y:65,w:30,h:28},{x:63,y:65,w:30,h:28}];
+  for(const c of corners){
+    const r=()=>c.x+rng()*c.w, d=()=>c.y+rng()*c.h;
+    const[ax,ay,bx,by]=[r(),d(),r(),d()];
+    svg.appendChild(el(ns,'path',{d:`M ${ax.toFixed(1)},${ay.toFixed(1)} L ${bx.toFixed(1)},${ay.toFixed(1)} L ${bx.toFixed(1)},${by.toFixed(1)}`,fill:'none',stroke:'rgba(0,245,255,0.09)','stroke-width':'0.7'}));
+    for(let p=0;p<2;p++){const[px,py]=[r(),d()];svg.appendChild(el(ns,'rect',{x:(px-2).toFixed(1),y:(py-1.2).toFixed(1),width:'4',height:'2.4',rx:'0.4',fill:'rgba(0,245,255,0.06)',stroke:'rgba(0,245,255,0.13)','stroke-width':'0.4'}));}
+    const[vx,vy]=[r(),d()];
+    svg.appendChild(el(ns,'circle',{cx:vx.toFixed(1),cy:vy.toFixed(1),r:'2',fill:'none',stroke:'rgba(0,245,255,0.13)','stroke-width':'0.5'}));
+    svg.appendChild(el(ns,'circle',{cx:vx.toFixed(1),cy:vy.toFixed(1),r:'0.7',fill:'rgba(0,245,255,0.22)'}));
   }
-  svg.appendChild(defs);
+}
 
-  const bg = document.createElementNS(ns,'rect');
-  bg.setAttribute('width','100'); bg.setAttribute('height','100'); bg.setAttribute('fill','#080810');
-  svg.appendChild(bg);
-
-  for (let i = 0; i < 4; i++) {
-    const c = FLOWER_COLORS[edges[i]];
-    const p = document.createElementNS(ns,'path');
-    p.setAttribute('d', PETAL_PATHS[i]);
-    p.setAttribute('fill', `url(#rg${u}_${i})`);
-    p.setAttribute('stroke', c);
-    p.setAttribute('stroke-width','0.6');
-    p.setAttribute('stroke-opacity','0.55');
-    p.setAttribute('stroke-linejoin','round');
-    svg.appendChild(p);
+function makeTile(edges, tileIdx=0){
+  const ns='http://www.w3.org/2000/svg';
+  const svg=el(ns,'svg',{viewBox:'0 0 100 100',width:'100%',height:'100%'});
+  svg.appendChild(el(ns,'rect',{width:'100',height:'100',fill:'#080810'}));
+  addPCBCorners(svg,ns,tileIdx*7+3);
+  for(let i=0;i<4;i++){
+    const c=FLOWER_COLORS[edges[i]];
+    const[x1,y1,x2,y2,cx,cy,pw,ph]=TRACE_DIRS[i];
+    svg.appendChild(el(ns,'line',{x1,y1,x2,y2,stroke:c,'stroke-width':'5','stroke-opacity':'0.18'}));
+    svg.appendChild(el(ns,'line',{x1,y1,x2,y2,stroke:c,'stroke-width':'1.8'}));
+    svg.appendChild(el(ns,'rect',{x:(cx-pw/2).toFixed(1),y:(cy-ph/2).toFixed(1),width:pw,height:ph,rx:'1',fill:'#060612',stroke:c,'stroke-width':'1.2'}));
+    svg.appendChild(el(ns,'circle',{cx,cy,r:'1.8',fill:c,'fill-opacity':'0.9'}));
   }
-
-  const ring = document.createElementNS(ns,'circle');
-  ring.setAttribute('cx','50'); ring.setAttribute('cy','50'); ring.setAttribute('r','9');
-  ring.setAttribute('fill','#050508'); ring.setAttribute('stroke','rgba(0,245,255,0.4)'); ring.setAttribute('stroke-width','1');
-  svg.appendChild(ring);
-
-  const dot = document.createElementNS(ns,'circle');
-  dot.setAttribute('cx','50'); dot.setAttribute('cy','50'); dot.setAttribute('r','2.5');
-  dot.setAttribute('fill','rgba(0,245,255,0.35)');
-  svg.appendChild(dot);
-
+  const pts=Array.from({length:6},(_,i)=>{const a=Math.PI/180*(60*i-30);return`${(50+13*Math.cos(a)).toFixed(2)},${(50+13*Math.sin(a)).toFixed(2)}`;}).join(' ');
+  svg.appendChild(el(ns,'polygon',{points:pts,fill:'#050510',stroke:'rgba(0,245,255,0.5)','stroke-width':'1.2'}));
+  svg.appendChild(el(ns,'circle',{cx:'50',cy:'50',r:'6.5',fill:'none',stroke:'rgba(0,245,255,0.6)','stroke-width':'0.8'}));
+  for(const[x1,y1,x2,y2]of[[43,50,57,50],[50,43,50,57]])svg.appendChild(el(ns,'line',{x1,y1,x2,y2,stroke:'rgba(0,245,255,0.45)','stroke-width':'0.7'}));
+  svg.appendChild(el(ns,'circle',{cx:'50',cy:'50',r:'4',fill:'rgba(0,245,255,0.12)'}));
+  svg.appendChild(el(ns,'circle',{cx:'50',cy:'50',r:'2',fill:'#00f5ff'}));
   return svg;
 }
 
-// All 28 tiles at rot=0
-const h1 = document.createElement('h2'); h1.textContent = 'All 28 tiles (rotation 0)';
-document.body.appendChild(h1);
-const g1 = document.createElement('div'); g1.className = 'grid';
-TILES.forEach((edges, idx) => {
-  const col = document.createElement('div');
-  const wrap = document.createElement('div'); wrap.className = 'tile-wrap';
-  wrap.appendChild(makeTile(edges));
-  const lbl = document.createElement('div'); lbl.className = 'label'; lbl.textContent = idx;
-  col.append(wrap, lbl);
-  g1.appendChild(col);
-});
+function tile(edges, label, idx=0){
+  const col=document.createElement('div');
+  const wrap=document.createElement('div'); wrap.className='tile-wrap';
+  wrap.appendChild(makeTile(edges,idx));
+  const lbl=document.createElement('div'); lbl.className='label'; lbl.textContent=label;
+  col.append(wrap,lbl); return col;
+}
+
+function rotate(e,r){const[t,ri,b,l]=e;switch(r&3){case 1:return[l,t,ri,b];case 2:return[b,l,t,ri];case 3:return[ri,b,l,t];default:return[t,ri,b,l];}}
+
+const h1=document.createElement('h2'); h1.textContent='All 28 tiles'; document.body.appendChild(h1);
+const g1=document.createElement('div'); g1.className='grid';
+TILES.forEach((e,i)=>g1.appendChild(tile(e,i,i)));
 document.body.appendChild(g1);
 
-// 4 rotations of tile 0
-function rotate(edges, rot) {
-  const [t,r,b,l] = edges;
-  switch(rot&3){case 1:return[l,t,r,b];case 2:return[b,l,t,r];case 3:return[r,b,l,t];default:return[t,r,b,l];}
-}
-const h2 = document.createElement('h2'); h2.textContent = 'Tile #0 — all 4 rotations';
-document.body.appendChild(h2);
-const g2 = document.createElement('div'); g2.className = 'grid';
-for (let rot = 0; rot < 4; rot++) {
-  const col = document.createElement('div');
-  const wrap = document.createElement('div'); wrap.className = 'tile-wrap';
-  wrap.appendChild(makeTile(rotate(TILES[0], rot)));
-  const lbl = document.createElement('div'); lbl.className = 'label'; lbl.textContent = `rot ${rot}`;
-  col.append(wrap, lbl);
-  g2.appendChild(col);
-}
+const h2=document.createElement('h2'); h2.textContent='Tile #0 — 4 rotations'; document.body.appendChild(h2);
+const g2=document.createElement('div'); g2.className='grid';
+for(let r=0;r<4;r++) g2.appendChild(tile(rotate(TILES[0],r),`rot ${r}`,0));
 document.body.appendChild(g2);
 
-// One tile per flower
-const h3 = document.createElement('h2'); h3.textContent = '8 flower colours (same on all 4 edges)';
-document.body.appendChild(h3);
-const g3 = document.createElement('div'); g3.className = 'grid';
-for (let f = 0; f < 8; f++) {
-  const col = document.createElement('div');
-  const wrap = document.createElement('div'); wrap.className = 'tile-wrap';
-  wrap.appendChild(makeTile([f,f,f,f]));
-  const lbl = document.createElement('div'); lbl.className = 'label'; lbl.textContent = FLOWER_NAMES[f];
-  col.append(wrap, lbl);
-  g3.appendChild(col);
-}
+const h3=document.createElement('h2'); h3.textContent='8 flower colours'; document.body.appendChild(h3);
+const g3=document.createElement('div'); g3.className='grid';
+for(let f=0;f<8;f++) g3.appendChild(tile([f,f,f,f],FLOWER_NAMES[f],f));
 document.body.appendChild(g3);
 </script>
 </body>
