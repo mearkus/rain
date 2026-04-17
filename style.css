@@ -380,9 +380,11 @@ button {
   background: var(--card-bg);
   border: 1px solid var(--neon-pink);
   border-radius: var(--radius-md);
-  padding: 32px 28px;
+  padding: 28px 24px;
   max-width: 320px;
   width: 90%;
+  max-height: 90dvh;
+  overflow-y: auto;
   text-align: center;
   box-shadow:
     0 0 30px rgba(255, 0, 110, 0.25),
@@ -404,9 +406,135 @@ button {
   font-family: var(--mono);
   font-size: 14px;
   color: var(--text-color);
-  margin: 0 0 24px;
+  margin: 0 0 16px;
   line-height: 1.6;
   letter-spacing: 0.04em;
+}
+
+/* ── Initials entry ────────────────────────────────────────────────────────── */
+#initials-section {
+  margin: 0 0 16px;
+  text-align: center;
+}
+
+.hs-prompt {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--neon-cyan);
+  text-shadow: 0 0 6px var(--neon-cyan);
+  margin: 0 0 10px;
+}
+
+#initials-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+#initials-input {
+  width: 72px;
+  background: transparent;
+  border: 1px solid var(--neon-cyan);
+  color: var(--neon-cyan);
+  font-family: var(--mono);
+  font-size: 22px;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  padding: 6px 4px;
+  border-radius: var(--radius-sm);
+  outline: none;
+  caret-color: var(--neon-cyan);
+  box-shadow: 0 0 8px rgba(0, 245, 255, 0.25);
+}
+
+#initials-input:focus {
+  box-shadow: 0 0 18px rgba(0, 245, 255, 0.55);
+}
+
+#initials-submit {
+  background: transparent;
+  border: 1px solid var(--neon-cyan);
+  color: var(--neon-cyan);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  text-shadow: 0 0 6px var(--neon-cyan);
+  box-shadow: 0 0 8px rgba(0, 245, 255, 0.2);
+  transition: background 0.12s, box-shadow 0.12s;
+}
+
+#initials-submit:active {
+  background: rgba(0, 245, 255, 0.15);
+  box-shadow: 0 0 20px rgba(0, 245, 255, 0.55);
+}
+
+/* ── Leaderboard ───────────────────────────────────────────────────────────── */
+#leaderboard {
+  margin: 0 0 16px;
+  text-align: left;
+}
+
+.hs-title {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--neon-purple);
+  text-shadow: 0 0 6px var(--neon-purple);
+  margin: 0 0 8px;
+  text-align: center;
+}
+
+#score-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+#score-list li {
+  display: flex;
+  align-items: center;
+  padding: 4px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text-color);
+  gap: 6px;
+}
+
+#score-list li.hs-highlight {
+  color: var(--neon-yellow);
+  text-shadow: 0 0 8px var(--neon-yellow);
+}
+
+.hs-rank {
+  width: 20px;
+  font-size: 10px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.hs-initials {
+  flex: 1;
+  letter-spacing: 0.15em;
+}
+
+.hs-score {
+  min-width: 28px;
+  text-align: right;
+}
+
+.hs-empty {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 8px 0;
+  font-size: 11px;
 }
 
 #play-again-btn {
