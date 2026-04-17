@@ -67,6 +67,15 @@ const NEIGHBORS = [
   { dc: -1, dr:  0, side: 'l' },
 ];
 
+// Per-direction: [traceX1, traceY1, traceX2, traceY2, padCX, padCY, padW, padH]
+// Trace runs from hex edge to inner edge of terminal pad; pad sits at tile border.
+const TRACE_DIRS = [
+  [50, 37, 50, 12,   50,  6.5, 13, 8],   // top
+  [61, 50, 88, 50,   93.5, 50,  8, 13],  // right
+  [50, 63, 50, 88,   50, 93.5, 13, 8],   // bottom
+  [39, 50, 12, 50,    6.5, 50,  8, 13],  // left
+];
+
 // ─── High scores ───────────────────────────────────────────────────────────────
 
 const HS_KEY = 'agr-highscores';
@@ -359,21 +368,106 @@ function tileY(row) { return (row - state.boardBounds.minRow) * TILE_SIZE + BOAR
 
 // ─── Rendering ─────────────────────────────────────────────────────────────────
 
-function createTileElement(tileIdx, rotation) {
-  const el = document.createElement('div');
-  el.className = 'tile';
-  const edges = getTileEdges(tileIdx, rotation);
-  const sides = ['top', 'right', 'bottom', 'left'];
-  for (let i = 0; i < 4; i++) {
-    const petal = document.createElement('div');
-    petal.className = `petal ${sides[i]}`;
-    petal.style.background = FLOWER_COLORS[edges[i]];
-    el.appendChild(petal);
-  }
-  const center = document.createElement('div');
-  center.className = 'tile-center';
-  el.appendChild(center);
+// Linear congruential generator — deterministic PCB decoration per tile.
+function lcg(seed) {
+  let s = (seed * 1664525 + 1013904223) >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 0x100000000; };
+}
+
+function svgEl(ns, tag, attrs) {
+  const el = document.createElementNS(ns, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
   return el;
+}
+
+// Subtle PCB traces, pads, and vias in the four corner quadrants.
+function addPCBCorners(svg, ns, seed) {
+  const rng = lcg(seed);
+  const corners = [
+    { x: 7,  y: 7,  w: 30, h: 28 },  // top-left
+    { x: 63, y: 7,  w: 30, h: 28 },  // top-right
+    { x: 7,  y: 65, w: 30, h: 28 },  // bottom-left
+    { x: 63, y: 65, w: 30, h: 28 },  // bottom-right
+  ];
+  for (const c of corners) {
+    const r = () => c.x + rng() * c.w;
+    const d = () => c.y + rng() * c.h;
+    // L-shaped trace
+    const [ax, ay, bx, by] = [r(), d(), r(), d()];
+    svg.appendChild(svgEl(ns, 'path', {
+      d: `M ${ax.toFixed(1)},${ay.toFixed(1)} L ${bx.toFixed(1)},${ay.toFixed(1)} L ${bx.toFixed(1)},${by.toFixed(1)}`,
+      fill: 'none', stroke: 'rgba(0,245,255,0.09)', 'stroke-width': '0.7',
+    }));
+    // Two SMD pads
+    for (let p = 0; p < 2; p++) {
+      const [px, py] = [r(), d()];
+      svg.appendChild(svgEl(ns, 'rect', {
+        x: (px-2).toFixed(1), y: (py-1.2).toFixed(1), width: '4', height: '2.4', rx: '0.4',
+        fill: 'rgba(0,245,255,0.06)', stroke: 'rgba(0,245,255,0.13)', 'stroke-width': '0.4',
+      }));
+    }
+    // Via hole
+    const [vx, vy] = [r(), d()];
+    svg.appendChild(svgEl(ns, 'circle', { cx: vx.toFixed(1), cy: vy.toFixed(1), r: '2', fill: 'none', stroke: 'rgba(0,245,255,0.13)', 'stroke-width': '0.5' }));
+    svg.appendChild(svgEl(ns, 'circle', { cx: vx.toFixed(1), cy: vy.toFixed(1), r: '0.7', fill: 'rgba(0,245,255,0.22)' }));
+  }
+}
+
+function createTileElement(tileIdx, rotation) {
+  const wrap  = document.createElement('div');
+  wrap.className = 'tile';
+  const edges = getTileEdges(tileIdx, rotation);
+  const ns    = 'http://www.w3.org/2000/svg';
+
+  const svg = svgEl(ns, 'svg', { viewBox: '0 0 100 100', width: '100%', height: '100%' });
+
+  // Background
+  svg.appendChild(svgEl(ns, 'rect', { width: '100', height: '100', fill: '#080810' }));
+
+  // PCB corner decorations (deterministic per tile)
+  addPCBCorners(svg, ns, tileIdx * 7 + 3);
+
+  // Coloured neon traces + terminal pads
+  for (let i = 0; i < 4; i++) {
+    const color = FLOWER_COLORS[edges[i]];
+    const [x1, y1, x2, y2, cx, cy, pw, ph] = TRACE_DIRS[i];
+
+    // Outer glow
+    svg.appendChild(svgEl(ns, 'line', { x1, y1, x2, y2, stroke: color, 'stroke-width': '8', 'stroke-opacity': '0.2' }));
+    // Core trace
+    svg.appendChild(svgEl(ns, 'line', { x1, y1, x2, y2, stroke: color, 'stroke-width': '3' }));
+
+    // Terminal pad (square connector at tile edge)
+    svg.appendChild(svgEl(ns, 'rect', {
+      x: (cx - pw / 2).toFixed(1), y: (cy - ph / 2).toFixed(1),
+      width: pw, height: ph, rx: '1.5',
+      fill: '#060612', stroke: color, 'stroke-width': '1.5',
+    }));
+    // Via inside pad
+    svg.appendChild(svgEl(ns, 'circle', { cx, cy, r: '3', fill: color, 'fill-opacity': '0.9' }));
+  }
+
+  // Centre hex (pointy-top, r=13)
+  const pts = Array.from({ length: 6 }, (_, i) => {
+    const a = Math.PI / 180 * (60 * i - 30);
+    return `${(50 + 13 * Math.cos(a)).toFixed(2)},${(50 + 13 * Math.sin(a)).toFixed(2)}`;
+  }).join(' ');
+  svg.appendChild(svgEl(ns, 'polygon', { points: pts, fill: '#050510', stroke: 'rgba(0,245,255,0.5)', 'stroke-width': '1.2' }));
+
+  // Target ring
+  svg.appendChild(svgEl(ns, 'circle', { cx: '50', cy: '50', r: '6.5', fill: 'none', stroke: 'rgba(0,245,255,0.6)', 'stroke-width': '0.8' }));
+
+  // Crosshair
+  for (const [x1, y1, x2, y2] of [[43,50,57,50],[50,43,50,57]]) {
+    svg.appendChild(svgEl(ns, 'line', { x1, y1, x2, y2, stroke: 'rgba(0,245,255,0.45)', 'stroke-width': '0.7' }));
+  }
+
+  // Centre glow + dot
+  svg.appendChild(svgEl(ns, 'circle', { cx: '50', cy: '50', r: '4', fill: 'rgba(0,245,255,0.12)' }));
+  svg.appendChild(svgEl(ns, 'circle', { cx: '50', cy: '50', r: '2', fill: '#00f5ff' }));
+
+  wrap.appendChild(svg);
+  return wrap;
 }
 
 function renderBoard() {

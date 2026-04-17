@@ -187,43 +187,23 @@ button {
   z-index: 1;
 }
 
-/* ── Tiles ─────────────────────────────────────────────────────────────────── */
+/* ── Tiles (SVG-rendered) ──────────────────────────────────────────────────── */
 .tile {
   position: absolute;
   width:  var(--tile-size);
   height: var(--tile-size);
   border-radius: var(--radius-sm);
   overflow: hidden;
-  border: 1px solid rgba(0, 245, 255, 0.2);
+  border: 1px solid rgba(0, 245, 255, 0.18);
   box-shadow:
-    0 0 10px rgba(0, 0, 0, 0.7),
-    0 0 4px rgba(0, 245, 255, 0.15);
+    0 0 12px rgba(0, 0, 0, 0.8),
+    0 0 5px rgba(0, 245, 255, 0.12);
 }
 
-.petal {
+.tile svg {
+  display: block;
   position: absolute;
-  width: 100%;
-  height: 100%;
-  /* neon petals are brighter — no extra filter needed */
-}
-
-.petal.top    { clip-path: polygon(0 0, 100% 0, 50% 50%); }
-.petal.right  { clip-path: polygon(100% 0, 100% 100%, 50% 50%); }
-.petal.bottom { clip-path: polygon(100% 100%, 0 100%, 50% 50%); }
-.petal.left   { clip-path: polygon(0 100%, 0 0, 50% 50%); }
-
-.tile-center {
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: rgba(5, 5, 12, 0.85);
-  border: 1px solid rgba(0, 245, 255, 0.35);
-  box-shadow: 0 0 6px rgba(0, 245, 255, 0.3);
-  top:  50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
+  inset: 0;
 }
 
 /* ── Valid placement spots ─────────────────────────────────────────────────── */
