@@ -67,6 +67,20 @@ const NEIGHBORS = [
   { dc: -1, dr:  0, side: 'l' },
 ];
 
+// SVG petal paths in a 100×100 viewBox.
+// Each is a leaf shape from center (50,50) to the edge midpoint,
+// drawn as two cubic bezier curves (left side + right side).
+const PETAL_PATHS = [
+  'M 50,50 C 25,38 25,9 50,5 C 75,9 75,38 50,50 Z',    // top   — tip (50,5)
+  'M 50,50 C 62,25 91,25 95,50 C 91,75 62,75 50,50 Z',  // right — tip (95,50)
+  'M 50,50 C 75,62 75,91 50,95 C 25,91 25,62 50,50 Z',  // bottom— tip (50,95)
+  'M 50,50 C 38,75 9,75 5,50 C 9,25 38,25 50,50 Z',    // left  — tip (5,50)
+];
+
+// Gradient focal points for each petal (tip positions as percentages).
+const PETAL_GRAD_CX = ['50%', '95%', '50%', '5%'];
+const PETAL_GRAD_CY = ['5%', '50%', '95%', '50%'];
+
 // ─── High scores ───────────────────────────────────────────────────────────────
 
 const HS_KEY = 'agr-highscores';
@@ -359,21 +373,82 @@ function tileY(row) { return (row - state.boardBounds.minRow) * TILE_SIZE + BOAR
 
 // ─── Rendering ─────────────────────────────────────────────────────────────────
 
+let _svgUid = 0;
+
 function createTileElement(tileIdx, rotation) {
-  const el = document.createElement('div');
-  el.className = 'tile';
+  const wrap  = document.createElement('div');
+  wrap.className = 'tile';
   const edges = getTileEdges(tileIdx, rotation);
-  const sides = ['top', 'right', 'bottom', 'left'];
+  const ns    = 'http://www.w3.org/2000/svg';
+  const uid   = _svgUid++;
+
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 100 100');
+  svg.setAttribute('width',   '100%');
+  svg.setAttribute('height',  '100%');
+
+  // ── Defs: one radial gradient per petal ──────────────────────────────────
+  const defs = document.createElementNS(ns, 'defs');
   for (let i = 0; i < 4; i++) {
-    const petal = document.createElement('div');
-    petal.className = `petal ${sides[i]}`;
-    petal.style.background = FLOWER_COLORS[edges[i]];
-    el.appendChild(petal);
+    const color = FLOWER_COLORS[edges[i]];
+    const grad  = document.createElementNS(ns, 'radialGradient');
+    grad.setAttribute('id', `rg${uid}_${i}`);
+    grad.setAttribute('cx', PETAL_GRAD_CX[i]);
+    grad.setAttribute('cy', PETAL_GRAD_CY[i]);
+    grad.setAttribute('r',  '72%');
+    const s1 = document.createElementNS(ns, 'stop');
+    s1.setAttribute('offset',       '0%');
+    s1.setAttribute('stop-color',   color);
+    s1.setAttribute('stop-opacity', '1');
+    const s2 = document.createElementNS(ns, 'stop');
+    s2.setAttribute('offset',       '100%');
+    s2.setAttribute('stop-color',   color);
+    s2.setAttribute('stop-opacity', '0.45');
+    grad.append(s1, s2);
+    defs.appendChild(grad);
   }
-  const center = document.createElement('div');
-  center.className = 'tile-center';
-  el.appendChild(center);
-  return el;
+  svg.appendChild(defs);
+
+  // ── Tile background ───────────────────────────────────────────────────────
+  const bg = document.createElementNS(ns, 'rect');
+  bg.setAttribute('width',  '100');
+  bg.setAttribute('height', '100');
+  bg.setAttribute('fill',   '#080810');
+  svg.appendChild(bg);
+
+  // ── Petals ────────────────────────────────────────────────────────────────
+  for (let i = 0; i < 4; i++) {
+    const color = FLOWER_COLORS[edges[i]];
+    const path  = document.createElementNS(ns, 'path');
+    path.setAttribute('d',              PETAL_PATHS[i]);
+    path.setAttribute('fill',           `url(#rg${uid}_${i})`);
+    path.setAttribute('stroke',         color);
+    path.setAttribute('stroke-width',   '0.6');
+    path.setAttribute('stroke-opacity', '0.55');
+    path.setAttribute('stroke-linejoin','round');
+    svg.appendChild(path);
+  }
+
+  // ── Centre ring ───────────────────────────────────────────────────────────
+  const ring = document.createElementNS(ns, 'circle');
+  ring.setAttribute('cx',           '50');
+  ring.setAttribute('cy',           '50');
+  ring.setAttribute('r',            '9');
+  ring.setAttribute('fill',         '#050508');
+  ring.setAttribute('stroke',       'rgba(0,245,255,0.4)');
+  ring.setAttribute('stroke-width', '1');
+  svg.appendChild(ring);
+
+  // ── Centre dot ────────────────────────────────────────────────────────────
+  const dot = document.createElementNS(ns, 'circle');
+  dot.setAttribute('cx',   '50');
+  dot.setAttribute('cy',   '50');
+  dot.setAttribute('r',    '2.5');
+  dot.setAttribute('fill', 'rgba(0,245,255,0.35)');
+  svg.appendChild(dot);
+
+  wrap.appendChild(svg);
+  return wrap;
 }
 
 function renderBoard() {
