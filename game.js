@@ -1,6 +1,6 @@
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TILE_SIZE = 72;
+const TILE_SIZE    = 72;
 const BOARD_PADDING = 72;
 
 // 28 tiles, each [top, right, bottom, left], flowers 0-7.
@@ -38,11 +38,11 @@ const TILES = [
   [3, 5, 7, 1],  // 21
   [5, 7, 1, 3],  // 22
   [7, 1, 3, 5],  // 23
-  // Bridge tiles — fill gaps so every flower hits exactly 14 total
-  [0, 2, 5, 7],  // 24  {0,2,5,7}
-  [1, 3, 4, 6],  // 25  {1,3,4,6}
-  [3, 7, 0, 4],  // 26  {0,3,4,7}
-  [2, 6, 1, 5],  // 27  {1,2,5,6}
+  // Bridge tiles
+  [0, 2, 5, 7],  // 24
+  [1, 3, 4, 6],  // 25
+  [3, 7, 0, 4],  // 26
+  [2, 6, 1, 5],  // 27
 ];
 
 const FLOWER_COLORS = [
@@ -59,7 +59,7 @@ const FLOWER_COLORS = [
 const FLOWER_NAMES = ['Rose','Iris','Lotus','Cherry','Plum','Lily','Orchid','Peony'];
 
 const EDGE_IDX = { t: 0, r: 1, b: 2, l: 3 };
-const OPPOSITE  = { t: 'b', r: 'l', b: 't', l: 'r' };
+const OPPOSITE = { t: 'b', r: 'l', b: 't', l: 'r' };
 const NEIGHBORS = [
   { dc:  0, dr: -1, side: 't' },
   { dc:  1, dr:  0, side: 'r' },
@@ -70,33 +70,45 @@ const NEIGHBORS = [
 // ─── State ─────────────────────────────────────────────────────────────────────
 
 const state = {
-  deck:        [],
-  board:       new Map(),   // "col,row" → tileIdx
-  currentTile: null,
-  validSpots:  [],          // [{col, row}]
-  tokens:      new Array(8).fill(false),  // placed[flowerIdx]
-  boardBounds: { minCol: 0, maxCol: 0, minRow: 0, maxRow: 0 },
-  panOffset:   { x: 0, y: 0 },
-  phase:       'playing',   // 'playing' | 'won' | 'ended'
-  score:       0,
-  blossoms:    new Set(),   // "cx,cy" corner keys
+  deck:            [],
+  board:           new Map(),  // "col,row" → {idx, rot}
+  currentTile:     null,
+  currentRotation: 0,          // 0-3 (×90° CW)
+  validSpots:      [],
+  tokens:          new Array(8).fill(false),
+  boardBounds:     { minCol: 0, maxCol: 0, minRow: 0, maxRow: 0 },
+  panOffset:       { x: 0, y: 0 },
+  phase:           'playing',
+  score:           0,
+  blossoms:        new Set(),
 };
 
 // ─── DOM caches ────────────────────────────────────────────────────────────────
 
-const tileElements    = new Map();  // boardKey  → element
-const spotElements    = new Map();  // boardKey  → element
-const blossomElements = new Map();  // cornerKey → element
+const tileElements    = new Map();
+const spotElements    = new Map();
+const blossomElements = new Map();
 
 // ─── Utilities ─────────────────────────────────────────────────────────────────
 
-function edgeOf(tileIdx, side) {
-  return TILES[tileIdx][EDGE_IDX[side]];
+// Returns [top, right, bottom, left] for a tile index at a given rotation (0-3).
+// Rotation is clockwise: 1 = 90° CW, 2 = 180°, 3 = 270° CW.
+function getTileEdges(tileIdx, rotation) {
+  const [t, r, b, l] = TILES[tileIdx];
+  switch (rotation & 3) {
+    case 1: return [l, t, r, b];
+    case 2: return [b, l, t, r];
+    case 3: return [r, b, l, t];
+    default: return [t, r, b, l];
+  }
 }
 
-function boardKey(col, row) {
-  return `${col},${row}`;
+// Edge value for a board entry {idx, rot}.
+function boardEdge(entry, side) {
+  return getTileEdges(entry.idx, entry.rot)[EDGE_IDX[side]];
 }
+
+function boardKey(col, row) { return `${col},${row}`; }
 
 function shuffleArray(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -108,37 +120,33 @@ function shuffleArray(arr) {
 
 // ─── Placement validation ──────────────────────────────────────────────────────
 
-function isValidPlacement(tileIdx, col, row) {
+function isValidPlacement(tileIdx, col, row, rotation) {
   if (state.board.has(boardKey(col, row))) return false;
+  const edges = getTileEdges(tileIdx, rotation);
   let hasNeighbor = false;
   for (const { dc, dr, side } of NEIGHBORS) {
-    const nc = col + dc, nr = row + dr;
-    const nKey = boardKey(nc, nr);
-    if (state.board.has(nKey)) {
+    const neighbor = state.board.get(boardKey(col + dc, row + dr));
+    if (neighbor) {
       hasNeighbor = true;
-      const neighborTile = state.board.get(nKey);
-      if (edgeOf(tileIdx, side) !== edgeOf(neighborTile, OPPOSITE[side])) {
-        return false;
-      }
+      if (edges[EDGE_IDX[side]] !== boardEdge(neighbor, OPPOSITE[side])) return false;
     }
   }
   return hasNeighbor;
 }
 
-function findValidSpots(tileIdx) {
+function findValidSpots(tileIdx, rotation) {
   const candidates = new Set();
   for (const key of state.board.keys()) {
     const [col, row] = key.split(',').map(Number);
     for (const { dc, dr } of NEIGHBORS) {
-      const nc = col + dc, nr = row + dr;
-      const nKey = boardKey(nc, nr);
-      if (!state.board.has(nKey)) candidates.add(nKey);
+      const nk = boardKey(col + dc, row + dr);
+      if (!state.board.has(nk)) candidates.add(nk);
     }
   }
   const spots = [];
   for (const key of candidates) {
     const [col, row] = key.split(',').map(Number);
-    if (isValidPlacement(tileIdx, col, row)) spots.push({ col, row });
+    if (isValidPlacement(tileIdx, col, row, rotation)) spots.push({ col, row });
   }
   return spots;
 }
@@ -147,15 +155,11 @@ function findValidSpots(tileIdx) {
 
 function updateBounds(col, row) {
   const b = state.boardBounds;
-  const oldMinCol = b.minCol;
-  const oldMinRow = b.minRow;
-
+  const oldMinCol = b.minCol, oldMinRow = b.minRow;
   b.minCol = Math.min(b.minCol, col);
   b.maxCol = Math.max(b.maxCol, col);
   b.minRow = Math.min(b.minRow, row);
   b.maxRow = Math.max(b.maxRow, row);
-
-  // Compensate pan so existing tiles don't jump when bounds expand negatively
   if (b.minCol < oldMinCol) state.panOffset.x -= (oldMinCol - b.minCol) * TILE_SIZE;
   if (b.minRow < oldMinRow) state.panOffset.y -= (oldMinRow - b.minRow) * TILE_SIZE;
 }
@@ -163,52 +167,42 @@ function updateBounds(col, row) {
 // ─── Blossom detection ─────────────────────────────────────────────────────────
 
 function getBlossomFlowers(cx, cy) {
-  // Corner (cx,cy) is the top-left corner of tile (cx,cy).
-  // The four surrounding tiles are: (cx-1,cy-1) tl, (cx,cy-1) tr, (cx-1,cy) bl, (cx,cy) br.
   const tl = state.board.get(boardKey(cx - 1, cy - 1));
   const tr = state.board.get(boardKey(cx,     cy - 1));
   const bl = state.board.get(boardKey(cx - 1, cy    ));
   const br = state.board.get(boardKey(cx,     cy    ));
   const flowers = new Set();
-  if (tl !== undefined) { flowers.add(edgeOf(tl, 'r')); flowers.add(edgeOf(tl, 'b')); }
-  if (tr !== undefined) { flowers.add(edgeOf(tr, 'l')); flowers.add(edgeOf(tr, 'b')); }
-  if (bl !== undefined) { flowers.add(edgeOf(bl, 'r')); flowers.add(edgeOf(bl, 't')); }
-  if (br !== undefined) { flowers.add(edgeOf(br, 'l')); flowers.add(edgeOf(br, 't')); }
+  if (tl) { flowers.add(boardEdge(tl, 'r')); flowers.add(boardEdge(tl, 'b')); }
+  if (tr) { flowers.add(boardEdge(tr, 'l')); flowers.add(boardEdge(tr, 'b')); }
+  if (bl) { flowers.add(boardEdge(bl, 'r')); flowers.add(boardEdge(bl, 't')); }
+  if (br) { flowers.add(boardEdge(br, 'l')); flowers.add(boardEdge(br, 't')); }
   return flowers;
 }
 
 function checkBlossoms(placedCol, placedRow) {
-  // The placed tile participates in 4 potential blossom corners
   const corners = [
     [placedCol,     placedRow    ],
     [placedCol + 1, placedRow    ],
     [placedCol,     placedRow + 1],
     [placedCol + 1, placedRow + 1],
   ];
-
   for (const [cx, cy] of corners) {
     const tl = state.board.get(boardKey(cx - 1, cy - 1));
     const tr = state.board.get(boardKey(cx,     cy - 1));
     const bl = state.board.get(boardKey(cx - 1, cy    ));
     const br = state.board.get(boardKey(cx,     cy    ));
-    if (tl === undefined || tr === undefined || bl === undefined || br === undefined) continue;
+    if (!tl || !tr || !bl || !br) continue;
 
-    const cornerKey = boardKey(cx, cy);
-    if (state.blossoms.has(cornerKey)) continue;  // already processed
+    const ck = boardKey(cx, cy);
+    if (state.blossoms.has(ck)) continue;
+    state.blossoms.add(ck);
 
-    state.blossoms.add(cornerKey);
-
-    // Claim the first available matching token
     const flowers = getBlossomFlowers(cx, cy);
     for (const f of flowers) {
-      if (!state.tokens[f]) {
-        state.tokens[f] = true;
-        break;
-      }
+      if (!state.tokens[f]) { state.tokens[f] = true; break; }
     }
   }
 
-  // Update score
   if (state.tokens.every(Boolean)) {
     state.score = 8 + state.deck.length;
     state.phase = 'won';
@@ -220,22 +214,31 @@ function checkBlossoms(placedCol, placedRow) {
 // ─── Game flow ─────────────────────────────────────────────────────────────────
 
 function drawNextTile() {
-  // Draw and discard until we find a placeable tile or exhaust the deck
   while (state.deck.length > 0) {
     const candidate = state.deck.shift();
-    const spots = findValidSpots(candidate);
-    if (spots.length > 0) {
-      state.currentTile = candidate;
-      state.validSpots = spots;
-      return;
+    // Try every rotation — only discard if truly unplaceable in all orientations
+    for (let rot = 0; rot < 4; rot++) {
+      const spots = findValidSpots(candidate, rot);
+      if (spots.length > 0) {
+        state.currentTile     = candidate;
+        state.currentRotation = rot;
+        state.validSpots      = spots;
+        return;
+      }
     }
-    // No valid spots — silently discard
+    // Genuinely unplaceable in any orientation — discard silently
   }
-  // Deck exhausted
   state.currentTile = null;
-  state.validSpots = [];
-  state.phase = 'ended';
-  state.score = state.tokens.filter(Boolean).length;
+  state.validSpots  = [];
+  state.phase       = 'ended';
+  state.score       = state.tokens.filter(Boolean).length;
+}
+
+function rotateCurrentTile() {
+  if (!state.currentTile === null || state.phase !== 'playing') return;
+  state.currentRotation = (state.currentRotation + 1) & 3;
+  state.validSpots = findValidSpots(state.currentTile, state.currentRotation);
+  render();
 }
 
 function placeTile(col, row) {
@@ -243,17 +246,15 @@ function placeTile(col, row) {
   if (state.currentTile === null) return;
   if (!state.validSpots.some(s => s.col === col && s.row === row)) return;
 
-  const tileIdx = state.currentTile;
+  const entry = { idx: state.currentTile, rot: state.currentRotation };
   state.currentTile = null;
-  state.validSpots = [];
+  state.validSpots  = [];
 
-  state.board.set(boardKey(col, row), tileIdx);
+  state.board.set(boardKey(col, row), entry);
   updateBounds(col, row);
   checkBlossoms(col, row);
 
-  if (state.phase !== 'won') {
-    drawNextTile();
-  }
+  if (state.phase !== 'won') drawNextTile();
 
   render();
 
@@ -265,28 +266,27 @@ function placeTile(col, row) {
 }
 
 function initGame() {
-  // Clear DOM caches
   tileElements.clear();
   spotElements.clear();
   blossomElements.clear();
   document.getElementById('board').innerHTML = '';
 
-  // Reset state
   const fullDeck = shuffleArray([...Array(TILES.length).keys()]);
-  state.deck        = fullDeck;
-  state.board       = new Map();
-  state.currentTile = null;
-  state.validSpots  = [];
-  state.tokens      = new Array(8).fill(false);
-  state.boardBounds = { minCol: 0, maxCol: 0, minRow: 0, maxRow: 0 };
-  state.panOffset   = { x: 0, y: 0 };
-  state.phase       = 'playing';
-  state.score       = 0;
-  state.blossoms    = new Set();
+  state.deck            = fullDeck;
+  state.board           = new Map();
+  state.currentTile     = null;
+  state.currentRotation = 0;
+  state.validSpots      = [];
+  state.tokens          = new Array(8).fill(false);
+  state.boardBounds     = { minCol: 0, maxCol: 0, minRow: 0, maxRow: 0 };
+  state.panOffset       = { x: 0, y: 0 };
+  state.phase           = 'playing';
+  state.score           = 0;
+  state.blossoms        = new Set();
 
-  // Place first tile at origin (no rules check)
-  const firstTile = state.deck.shift();
-  state.board.set(boardKey(0, 0), firstTile);
+  // Place first tile at origin with rotation 0
+  const firstIdx = state.deck.shift();
+  state.board.set(boardKey(0, 0), { idx: firstIdx, rot: 0 });
 
   hideOverlay();
   drawNextTile();
@@ -296,29 +296,20 @@ function initGame() {
 
 // ─── Pixel helpers ─────────────────────────────────────────────────────────────
 
-function tileX(col) {
-  return (col - state.boardBounds.minCol) * TILE_SIZE + BOARD_PADDING;
-}
-
-function tileY(row) {
-  return (row - state.boardBounds.minRow) * TILE_SIZE + BOARD_PADDING;
-}
+function tileX(col) { return (col - state.boardBounds.minCol) * TILE_SIZE + BOARD_PADDING; }
+function tileY(row) { return (row - state.boardBounds.minRow) * TILE_SIZE + BOARD_PADDING; }
 
 // ─── Rendering ─────────────────────────────────────────────────────────────────
 
-function createTileElement(tileIdx) {
+function createTileElement(tileIdx, rotation) {
   const el = document.createElement('div');
   el.className = 'tile';
-  const sides = [
-    ['top',    't'],
-    ['right',  'r'],
-    ['bottom', 'b'],
-    ['left',   'l'],
-  ];
-  for (const [cls, key] of sides) {
+  const edges = getTileEdges(tileIdx, rotation);
+  const sides = ['top', 'right', 'bottom', 'left'];
+  for (let i = 0; i < 4; i++) {
     const petal = document.createElement('div');
-    petal.className = `petal ${cls}`;
-    petal.style.background = FLOWER_COLORS[edgeOf(tileIdx, key)];
+    petal.className = `petal ${sides[i]}`;
+    petal.style.background = FLOWER_COLORS[edges[i]];
     el.appendChild(petal);
   }
   const center = document.createElement('div');
@@ -330,16 +321,14 @@ function createTileElement(tileIdx) {
 function renderBoard() {
   const board = document.getElementById('board');
   const b = state.boardBounds;
-  const boardW = (b.maxCol - b.minCol + 1) * TILE_SIZE + 2 * BOARD_PADDING;
-  const boardH = (b.maxRow - b.minRow + 1) * TILE_SIZE + 2 * BOARD_PADDING;
-  board.style.width  = boardW + 'px';
-  board.style.height = boardH + 'px';
+  board.style.width  = (b.maxCol - b.minCol + 1) * TILE_SIZE + 2 * BOARD_PADDING + 'px';
+  board.style.height = (b.maxRow - b.minRow + 1) * TILE_SIZE + 2 * BOARD_PADDING + 'px';
 
-  for (const [key, tileIdx] of state.board) {
+  for (const [key, entry] of state.board) {
     const [col, row] = key.split(',').map(Number);
     const x = tileX(col), y = tileY(row);
     if (!tileElements.has(key)) {
-      const el = createTileElement(tileIdx);
+      const el = createTileElement(entry.idx, entry.rot);
       el.style.left = x + 'px';
       el.style.top  = y + 'px';
       el.classList.add('placing');
@@ -347,7 +336,6 @@ function renderBoard() {
       tileElements.set(key, el);
       el.addEventListener('animationend', () => el.classList.remove('placing'), { once: true });
     } else {
-      // Reposition in case bounds changed
       const el = tileElements.get(key);
       el.style.left = x + 'px';
       el.style.top  = y + 'px';
@@ -359,12 +347,9 @@ function renderValidSpots() {
   const board = document.getElementById('board');
   const currentKeys = new Set(state.validSpots.map(s => boardKey(s.col, s.row)));
 
-  // Remove stale spots
   for (const [key, el] of spotElements) {
     if (!currentKeys.has(key)) { el.remove(); spotElements.delete(key); }
   }
-
-  // Add / reposition valid spots
   for (const { col, row } of state.validSpots) {
     const key = boardKey(col, row);
     const x = tileX(col), y = tileY(row);
@@ -408,21 +393,27 @@ function renderBlossomLayer() {
 
 function renderCurrentTile() {
   const container = document.getElementById('current-tile-container');
+  const label     = document.getElementById('current-tile-label');
   container.innerHTML = '';
+
   if (state.currentTile === null) {
     container.textContent = '—';
+    label.textContent = 'Next';
     return;
   }
-  const el = createTileElement(state.currentTile);
+
+  const el = createTileElement(state.currentTile, state.currentRotation);
   el.style.position = 'relative';
-  el.style.width  = '52px';
-  el.style.height = '52px';
+  el.style.width    = '52px';
+  el.style.height   = '52px';
   container.appendChild(el);
+
+  const rotLabel = ['↑', '→', '↓', '←'][state.currentRotation];
+  label.textContent = `Tap ${rotLabel}`;
 }
 
 function renderTokenRack() {
   const rack = document.getElementById('token-rack');
-  // Build token elements lazily / update in place
   const existing = rack.children;
   for (let i = 0; i < 8; i++) {
     let token = existing[i];
@@ -434,11 +425,7 @@ function renderTokenRack() {
       token.title = FLOWER_NAMES[i];
       rack.appendChild(token);
     }
-    if (state.tokens[i]) {
-      token.classList.add('placed');
-    } else {
-      token.classList.remove('placed');
-    }
+    token.classList.toggle('placed', state.tokens[i]);
   }
 }
 
@@ -467,33 +454,28 @@ function applyPan(animate) {
 }
 
 function centerBoard() {
-  const viewport = document.getElementById('board-viewport');
-  const b = state.boardBounds;
-  const boardW = (b.maxCol - b.minCol + 1) * TILE_SIZE + 2 * BOARD_PADDING;
-  const boardH = (b.maxRow - b.minRow + 1) * TILE_SIZE + 2 * BOARD_PADDING;
-  state.panOffset.x = Math.round((viewport.clientWidth  - boardW) / 2);
-  state.panOffset.y = Math.round((viewport.clientHeight - boardH) / 2);
+  const vp = document.getElementById('board-viewport');
+  const b  = state.boardBounds;
+  const bw = (b.maxCol - b.minCol + 1) * TILE_SIZE + 2 * BOARD_PADDING;
+  const bh = (b.maxRow - b.minRow + 1) * TILE_SIZE + 2 * BOARD_PADDING;
+  state.panOffset.x = Math.round((vp.clientWidth  - bw) / 2);
+  state.panOffset.y = Math.round((vp.clientHeight - bh) / 2);
   applyPan(true);
 }
 
 function autoPanToTile(col, row) {
-  const viewport = document.getElementById('board-viewport');
-  const tx = tileX(col) + TILE_SIZE / 2;
-  const ty = tileY(row) + TILE_SIZE / 2;
-  state.panOffset.x = Math.round(viewport.clientWidth  / 2 - tx);
-  state.panOffset.y = Math.round(viewport.clientHeight / 2 - ty);
+  const vp = document.getElementById('board-viewport');
+  state.panOffset.x = Math.round(vp.clientWidth  / 2 - tileX(col) - TILE_SIZE / 2);
+  state.panOffset.y = Math.round(vp.clientHeight / 2 - tileY(row) - TILE_SIZE / 2);
   applyPan(true);
 }
 
 // ─── Touch / mouse interaction ─────────────────────────────────────────────────
 
 const touch = {
-  active: false,
-  startX: 0, startY: 0,
+  active: false, startX: 0, startY: 0,
   startPanX: 0, startPanY: 0,
-  startTime: 0,
-  isPanning: false,
-  targetEl: null,
+  startTime: 0, isPanning: false, targetEl: null,
 };
 
 const PAN_THRESHOLD    = 8;
@@ -512,11 +494,8 @@ function onPointerDown(clientX, clientY, target) {
 
 function onPointerMove(clientX, clientY) {
   if (!touch.active) return;
-  const dx = clientX - touch.startX;
-  const dy = clientY - touch.startY;
-  if (Math.abs(dx) > PAN_THRESHOLD || Math.abs(dy) > PAN_THRESHOLD) {
-    touch.isPanning = true;
-  }
+  const dx = clientX - touch.startX, dy = clientY - touch.startY;
+  if (Math.abs(dx) > PAN_THRESHOLD || Math.abs(dy) > PAN_THRESHOLD) touch.isPanning = true;
   if (touch.isPanning) {
     state.panOffset.x = touch.startPanX + dx;
     state.panOffset.y = touch.startPanY + dy;
@@ -524,10 +503,9 @@ function onPointerMove(clientX, clientY) {
   }
 }
 
-function onPointerUp(clientX, clientY) {
+function onPointerUp() {
   if (!touch.active) return;
-  const duration = Date.now() - touch.startTime;
-  if (!touch.isPanning && duration < TAP_MAX_DURATION) {
+  if (!touch.isPanning && Date.now() - touch.startTime < TAP_MAX_DURATION) {
     handleTap(touch.targetEl);
   }
   touch.active = false;
@@ -546,35 +524,30 @@ function handleTap(el) {
 }
 
 function initInteraction() {
-  const viewport = document.getElementById('board-viewport');
+  const vp = document.getElementById('board-viewport');
 
-  // Touch
-  viewport.addEventListener('touchstart', e => {
+  vp.addEventListener('touchstart', e => {
     e.preventDefault();
     const t = e.touches[0];
     onPointerDown(t.clientX, t.clientY, document.elementFromPoint(t.clientX, t.clientY));
   }, { passive: false });
-
-  viewport.addEventListener('touchmove', e => {
+  vp.addEventListener('touchmove', e => {
     e.preventDefault();
     const t = e.touches[0];
     onPointerMove(t.clientX, t.clientY);
   }, { passive: false });
+  vp.addEventListener('touchend', e => { e.preventDefault(); onPointerUp(); }, { passive: false });
 
-  viewport.addEventListener('touchend', e => {
+  vp.addEventListener('mousedown', e => onPointerDown(e.clientX, e.clientY, e.target));
+  window.addEventListener('mousemove', e => onPointerMove(e.clientX, e.clientY));
+  window.addEventListener('mouseup', () => onPointerUp());
+
+  // Tap on current tile preview → rotate
+  document.getElementById('current-tile-area').addEventListener('click', rotateCurrentTile);
+  document.getElementById('current-tile-area').addEventListener('touchend', e => {
     e.preventDefault();
-    onPointerUp(0, 0);
-  }, { passive: false });
-
-  // Mouse (desktop testing)
-  viewport.addEventListener('mousedown', e => {
-    onPointerDown(e.clientX, e.clientY, e.target);
-  });
-  window.addEventListener('mousemove', e => {
-    onPointerMove(e.clientX, e.clientY);
-  });
-  window.addEventListener('mouseup', e => {
-    onPointerUp(e.clientX, e.clientY);
+    e.stopPropagation();
+    rotateCurrentTile();
   });
 }
 
@@ -584,19 +557,17 @@ function showOverlay() {
   const overlay = document.getElementById('overlay');
   const title   = document.getElementById('overlay-title');
   const message = document.getElementById('overlay-message');
-  const tokensPlaced = state.tokens.filter(Boolean).length;
+  const n = state.tokens.filter(Boolean).length;
 
   if (state.phase === 'won') {
     title.textContent   = 'All Flowers Bloomed!';
-    message.textContent = `Score: ${state.score}  (8 blooms + ${state.deck.length} remaining cards)`;
+    message.textContent = `Score: ${state.score}  (8 blooms + ${state.deck.length} remaining)`;
   } else {
-    const headings = ['No flowers bloomed', 'A single blossom', 'A gentle start',
-                      'Three blooms', 'Four blooms', 'Nearly there',
-                      'Six blooms', 'So close…', 'All Flowers Bloomed!'];
-    title.textContent   = headings[tokensPlaced] || `${tokensPlaced} blooms`;
-    message.textContent = `${tokensPlaced} of 8 flowers bloomed  ·  Score: ${state.score}`;
+    const labels = ['No blooms','One bloom','Two blooms','Three blooms',
+                    'Four blooms','Five blooms','Six blooms','So close…','All bloomed!'];
+    title.textContent   = labels[n] || `${n} blooms`;
+    message.textContent = `${n} of 8 flowers bloomed  ·  Score: ${state.score}`;
   }
-
   overlay.classList.remove('hidden');
 }
 
@@ -604,22 +575,17 @@ function hideOverlay() {
   document.getElementById('overlay').classList.add('hidden');
 }
 
-// ─── Help modal ────────────────────────────────────────────────────────────────
-
 function toggleHelp() {
-  const help = document.getElementById('help-modal');
-  help.classList.toggle('hidden');
+  document.getElementById('help-modal').classList.toggle('hidden');
 }
 
 // ─── Entry point ───────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
   initInteraction();
-
   document.getElementById('new-game-btn').addEventListener('click', initGame);
   document.getElementById('play-again-btn').addEventListener('click', initGame);
   document.getElementById('help-btn').addEventListener('click', toggleHelp);
   document.getElementById('help-close').addEventListener('click', toggleHelp);
-
   initGame();
 });
