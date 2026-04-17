@@ -46,14 +46,14 @@ const TILES = [
 ];
 
 const FLOWER_COLORS = [
-  '#E8A4B8', // 0 Rose
-  '#9BB5D4', // 1 Iris
-  '#7BBEA0', // 2 Lotus
-  '#F4C48C', // 3 Cherry
-  '#B8A0D4', // 4 Plum
-  '#A8D4A8', // 5 Lily
-  '#D4A87C', // 6 Orchid
-  '#90C4C4', // 7 Peony
+  '#ff006e', // 0 Rose    — neon magenta
+  '#4d9fff', // 1 Iris    — electric blue
+  '#00f5ff', // 2 Lotus   — neon cyan
+  '#f700ff', // 3 Cherry  — hot violet
+  '#9b5de5', // 4 Plum    — deep neon purple
+  '#39ff14', // 5 Lily    — acid green
+  '#ff6b00', // 6 Orchid  — electric orange
+  '#ffe600', // 7 Peony   — neon yellow
 ];
 
 const FLOWER_NAMES = ['Rose','Iris','Lotus','Cherry','Plum','Lily','Orchid','Peony'];
@@ -430,6 +430,7 @@ function renderTokenRack() {
       token = document.createElement('div');
       token.className = 'token';
       token.style.background = FLOWER_COLORS[i];
+      token.style.setProperty('--token-color', FLOWER_COLORS[i]);
       token.title = FLOWER_NAMES[i];
       rack.appendChild(token);
     }
