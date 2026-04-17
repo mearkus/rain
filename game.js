@@ -70,10 +70,10 @@ const NEIGHBORS = [
 // Per-direction: [traceX1, traceY1, traceX2, traceY2, padCX, padCY, padW, padH]
 // Trace runs from hex edge to inner edge of terminal pad; pad sits at tile border.
 const TRACE_DIRS = [
-  [50, 37, 50, 12,   50,  6.5, 8, 5],   // top
-  [61, 50, 88, 50,   93.5, 50, 5, 8],   // right
-  [50, 63, 50, 88,   50, 93.5, 8, 5],   // bottom
-  [39, 50, 12, 50,    6.5, 50, 5, 8],   // left
+  [50, 37, 50, 12,   50,  6.5, 13, 8],   // top
+  [61, 50, 88, 50,   93.5, 50,  8, 13],  // right
+  [50, 63, 50, 88,   50, 93.5, 13, 8],   // bottom
+  [39, 50, 12, 50,    6.5, 50,  8, 13],  // left
 ];
 
 // ─── High scores ───────────────────────────────────────────────────────────────
@@ -433,18 +433,18 @@ function createTileElement(tileIdx, rotation) {
     const [x1, y1, x2, y2, cx, cy, pw, ph] = TRACE_DIRS[i];
 
     // Outer glow
-    svg.appendChild(svgEl(ns, 'line', { x1, y1, x2, y2, stroke: color, 'stroke-width': '5', 'stroke-opacity': '0.18' }));
+    svg.appendChild(svgEl(ns, 'line', { x1, y1, x2, y2, stroke: color, 'stroke-width': '8', 'stroke-opacity': '0.2' }));
     // Core trace
-    svg.appendChild(svgEl(ns, 'line', { x1, y1, x2, y2, stroke: color, 'stroke-width': '1.8' }));
+    svg.appendChild(svgEl(ns, 'line', { x1, y1, x2, y2, stroke: color, 'stroke-width': '3' }));
 
     // Terminal pad (square connector at tile edge)
     svg.appendChild(svgEl(ns, 'rect', {
       x: (cx - pw / 2).toFixed(1), y: (cy - ph / 2).toFixed(1),
-      width: pw, height: ph, rx: '1',
-      fill: '#060612', stroke: color, 'stroke-width': '1.2',
+      width: pw, height: ph, rx: '1.5',
+      fill: '#060612', stroke: color, 'stroke-width': '1.5',
     }));
     // Via inside pad
-    svg.appendChild(svgEl(ns, 'circle', { cx, cy, r: '1.8', fill: color, 'fill-opacity': '0.9' }));
+    svg.appendChild(svgEl(ns, 'circle', { cx, cy, r: '3', fill: color, 'fill-opacity': '0.9' }));
   }
 
   // Centre hex (pointy-top, r=13)

@@ -27,10 +27,10 @@ const TILES=[
 const FLOWER_COLORS=['#ff006e','#4d9fff','#00f5ff','#f700ff','#9b5de5','#39ff14','#ff6b00','#ffe600'];
 const FLOWER_NAMES=['Rose','Iris','Lotus','Cherry','Plum','Lily','Orchid','Peony'];
 const TRACE_DIRS=[
-  [50,37,50,12,  50, 6.5,8,5],
-  [61,50,88,50,  93.5,50,5,8],
-  [50,63,50,88,  50,93.5,8,5],
-  [39,50,12,50,   6.5,50,5,8],
+  [50,37,50,12,  50, 6.5,13,8],
+  [61,50,88,50,  93.5,50,8,13],
+  [50,63,50,88,  50,93.5,13,8],
+  [39,50,12,50,   6.5,50,8,13],
 ];
 
 function lcg(seed){let s=(seed*1664525+1013904223)>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/0x100000000;};}
@@ -58,10 +58,10 @@ function makeTile(edges, tileIdx=0){
   for(let i=0;i<4;i++){
     const c=FLOWER_COLORS[edges[i]];
     const[x1,y1,x2,y2,cx,cy,pw,ph]=TRACE_DIRS[i];
-    svg.appendChild(el(ns,'line',{x1,y1,x2,y2,stroke:c,'stroke-width':'5','stroke-opacity':'0.18'}));
-    svg.appendChild(el(ns,'line',{x1,y1,x2,y2,stroke:c,'stroke-width':'1.8'}));
+    svg.appendChild(el(ns,'line',{x1,y1,x2,y2,stroke:c,'stroke-width':'8','stroke-opacity':'0.2'}));
+    svg.appendChild(el(ns,'line',{x1,y1,x2,y2,stroke:c,'stroke-width':'3'}));
     svg.appendChild(el(ns,'rect',{x:(cx-pw/2).toFixed(1),y:(cy-ph/2).toFixed(1),width:pw,height:ph,rx:'1',fill:'#060612',stroke:c,'stroke-width':'1.2'}));
-    svg.appendChild(el(ns,'circle',{cx,cy,r:'1.8',fill:c,'fill-opacity':'0.9'}));
+    svg.appendChild(el(ns,'circle',{cx,cy,r:'3',fill:c,'fill-opacity':'0.9'}));
   }
   const pts=Array.from({length:6},(_,i)=>{const a=Math.PI/180*(60*i-30);return`${(50+13*Math.cos(a)).toFixed(2)},${(50+13*Math.sin(a)).toFixed(2)}`;}).join(' ');
   svg.appendChild(el(ns,'polygon',{points:pts,fill:'#050510',stroke:'rgba(0,245,255,0.5)','stroke-width':'1.2'}));
