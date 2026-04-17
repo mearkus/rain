@@ -138,7 +138,7 @@ const state = {
   panOffset:       { x: 0, y: 0 },
   phase:           'playing',
   score:           0,
-  blossoms:        new Set(),
+  blossoms:        new Map(),  // "col,row" → flowerIdx claimed (-1 if none)
 };
 
 // ─── DOM caches ────────────────────────────────────────────────────────────────
@@ -253,12 +253,13 @@ function checkBlossoms(placedCol, placedRow) {
 
     const ck = boardKey(cx, cy);
     if (state.blossoms.has(ck)) continue;
-    state.blossoms.add(ck);
 
     const flowers = getBlossomFlowers(cx, cy);
+    let claimed = -1;
     for (const f of flowers) {
-      if (!state.tokens[f]) { state.tokens[f] = true; break; }
+      if (!state.tokens[f]) { state.tokens[f] = true; claimed = f; break; }
     }
+    state.blossoms.set(ck, claimed);
   }
 
   if (state.tokens.every(Boolean)) {
@@ -349,7 +350,7 @@ function initGame() {
   state.panOffset       = { x: 0, y: 0 };
   state.phase           = 'playing';
   state.score           = 0;
-  state.blossoms        = new Set();
+  state.blossoms        = new Map();
 
   // Place first tile at origin with rotation 0
   const firstIdx = state.deck.shift();
@@ -524,12 +525,14 @@ function renderValidSpots() {
 
 function renderBlossomLayer() {
   const board = document.getElementById('board');
-  for (const key of state.blossoms) {
+  for (const [key, flowerIdx] of state.blossoms) {
     const [cx, cy] = key.split(',').map(Number);
     const x = tileX(cx), y = tileY(cy);
     if (!blossomElements.has(key)) {
       const el = document.createElement('div');
       el.className = 'blossom-dot new';
+      const color = flowerIdx >= 0 ? FLOWER_COLORS[flowerIdx] : 'rgba(255,255,255,0.4)';
+      el.style.setProperty('--blossom-color', color);
       el.style.left = x + 'px';
       el.style.top  = y + 'px';
       board.appendChild(el);
