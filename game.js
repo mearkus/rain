@@ -235,10 +235,19 @@ function drawNextTile() {
 }
 
 function rotateCurrentTile() {
-  if (!state.currentTile === null || state.phase !== 'playing') return;
-  state.currentRotation = (state.currentRotation + 1) & 3;
-  state.validSpots = findValidSpots(state.currentTile, state.currentRotation);
-  render();
+  if (state.currentTile === null || state.phase !== 'playing') return;
+  // Advance to the next rotation that actually has valid spots
+  for (let i = 1; i <= 3; i++) {
+    const newRot = (state.currentRotation + i) & 3;
+    const spots = findValidSpots(state.currentTile, newRot);
+    if (spots.length > 0) {
+      state.currentRotation = newRot;
+      state.validSpots = spots;
+      render();
+      return;
+    }
+  }
+  // Only one valid rotation — nothing to change
 }
 
 function placeTile(col, row) {
@@ -408,8 +417,7 @@ function renderCurrentTile() {
   el.style.height   = '52px';
   container.appendChild(el);
 
-  const rotLabel = ['↑', '→', '↓', '←'][state.currentRotation];
-  label.textContent = `Tap ${rotLabel}`;
+  label.textContent = 'Tap to rotate';
 }
 
 function renderTokenRack() {
