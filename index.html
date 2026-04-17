@@ -45,6 +45,23 @@
     <div id="overlay-content">
       <h2 id="overlay-title"></h2>
       <p id="overlay-message"></p>
+
+      <!-- Initials entry — shown when score qualifies for leaderboard -->
+      <div id="initials-section" class="hidden">
+        <p class="hs-prompt">New high score — enter initials</p>
+        <div id="initials-row">
+          <input id="initials-input" type="text" maxlength="3" placeholder="AAA"
+                 autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text">
+          <button id="initials-submit">OK</button>
+        </div>
+      </div>
+
+      <!-- Leaderboard — shown after initials or when score doesn't qualify -->
+      <div id="leaderboard" class="hidden">
+        <h3 class="hs-title">High Scores</h3>
+        <ol id="score-list"></ol>
+      </div>
+
       <button id="play-again-btn">Play Again</button>
     </div>
   </div>

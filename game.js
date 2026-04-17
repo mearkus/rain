@@ -67,6 +67,55 @@ const NEIGHBORS = [
   { dc: -1, dr:  0, side: 'l' },
 ];
 
+// ─── High scores ───────────────────────────────────────────────────────────────
+
+const HS_KEY = 'agr-highscores';
+const HS_MAX = 10;
+
+function loadScores() {
+  try { return JSON.parse(localStorage.getItem(HS_KEY)) || []; }
+  catch { return []; }
+}
+
+// Returns the leaderboard index of the newly saved entry.
+function saveScore(initials, score) {
+  const scores = loadScores();
+  const entry = { initials: initials.toUpperCase().slice(0, 3), score };
+  scores.push(entry);
+  scores.sort((a, b) => b.score - a.score);
+  scores.splice(HS_MAX);
+  localStorage.setItem(HS_KEY, JSON.stringify(scores));
+  return scores.findIndex(s => s.initials === entry.initials && s.score === entry.score);
+}
+
+function qualifiesForLeaderboard(score) {
+  if (score <= 0) return false;
+  const scores = loadScores();
+  return scores.length < HS_MAX || score >= scores[scores.length - 1].score;
+}
+
+function renderLeaderboard(highlightIdx) {
+  const list   = document.getElementById('score-list');
+  const scores = loadScores();
+  list.innerHTML = '';
+  if (scores.length === 0) {
+    const li = document.createElement('li');
+    li.className     = 'hs-empty';
+    li.textContent   = 'No scores yet';
+    list.appendChild(li);
+    return;
+  }
+  for (let i = 0; i < scores.length; i++) {
+    const { initials, score } = scores[i];
+    const li = document.createElement('li');
+    if (i === highlightIdx) li.classList.add('hs-highlight');
+    li.innerHTML = `<span class="hs-rank">${i + 1}</span>`
+                 + `<span class="hs-initials">${initials}</span>`
+                 + `<span class="hs-score">${score}</span>`;
+    list.appendChild(li);
+  }
+}
+
 // ─── State ─────────────────────────────────────────────────────────────────────
 
 const state = {
@@ -235,10 +284,19 @@ function drawNextTile() {
 }
 
 function rotateCurrentTile() {
-  if (!state.currentTile === null || state.phase !== 'playing') return;
-  state.currentRotation = (state.currentRotation + 1) & 3;
-  state.validSpots = findValidSpots(state.currentTile, state.currentRotation);
-  render();
+  if (state.currentTile === null || state.phase !== 'playing') return;
+  // Advance to the next rotation that actually has valid spots
+  for (let i = 1; i <= 3; i++) {
+    const newRot = (state.currentRotation + i) & 3;
+    const spots = findValidSpots(state.currentTile, newRot);
+    if (spots.length > 0) {
+      state.currentRotation = newRot;
+      state.validSpots = spots;
+      render();
+      return;
+    }
+  }
+  // Only one valid rotation — nothing to change
 }
 
 function placeTile(col, row) {
@@ -408,8 +466,7 @@ function renderCurrentTile() {
   el.style.height   = '52px';
   container.appendChild(el);
 
-  const rotLabel = ['↑', '→', '↓', '←'][state.currentRotation];
-  label.textContent = `Tap ${rotLabel}`;
+  label.textContent = 'Tap to rotate';
 }
 
 function renderTokenRack() {
@@ -554,9 +611,11 @@ function initInteraction() {
 // ─── Overlay ───────────────────────────────────────────────────────────────────
 
 function showOverlay() {
-  const overlay = document.getElementById('overlay');
-  const title   = document.getElementById('overlay-title');
-  const message = document.getElementById('overlay-message');
+  const overlay         = document.getElementById('overlay');
+  const title           = document.getElementById('overlay-title');
+  const message         = document.getElementById('overlay-message');
+  const initialsSection = document.getElementById('initials-section');
+  const leaderboard     = document.getElementById('leaderboard');
   const n = state.tokens.filter(Boolean).length;
 
   if (state.phase === 'won') {
@@ -568,6 +627,19 @@ function showOverlay() {
     title.textContent   = labels[n] || `${n} blooms`;
     message.textContent = `${n} of 8 flowers bloomed  ·  Score: ${state.score}`;
   }
+
+  if (qualifiesForLeaderboard(state.score)) {
+    initialsSection.classList.remove('hidden');
+    leaderboard.classList.add('hidden');
+    const input = document.getElementById('initials-input');
+    input.value = '';
+    setTimeout(() => input.focus(), 150);
+  } else {
+    initialsSection.classList.add('hidden');
+    leaderboard.classList.remove('hidden');
+    renderLeaderboard(-1);
+  }
+
   overlay.classList.remove('hidden');
 }
 
@@ -587,5 +659,21 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('play-again-btn').addEventListener('click', initGame);
   document.getElementById('help-btn').addEventListener('click', toggleHelp);
   document.getElementById('help-close').addEventListener('click', toggleHelp);
+
+  function submitInitials() {
+    const input = document.getElementById('initials-input');
+    const val   = input.value.trim().toUpperCase();
+    if (val.length === 0) return;
+    const idx = saveScore(val, state.score);
+    document.getElementById('initials-section').classList.add('hidden');
+    document.getElementById('leaderboard').classList.remove('hidden');
+    renderLeaderboard(idx);
+  }
+
+  document.getElementById('initials-submit').addEventListener('click', submitInitials);
+  document.getElementById('initials-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitInitials();
+  });
+
   initGame();
 });
