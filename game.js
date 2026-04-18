@@ -138,7 +138,8 @@ const state = {
   panOffset:       { x: 0, y: 0 },
   phase:           'playing',
   score:           0,
-  blossoms:        new Map(),  // "col,row" → flowerIdx claimed (-1 if none)
+  blossoms:        new Map(),  // "col,row" → flowerIdx claimed (-1 none, -2 pending)
+  pendingChoices:  [],         // [{key, flowers:[flowerIdx,...]}] awaiting player pick
 };
 
 // ─── DOM caches ────────────────────────────────────────────────────────────────
@@ -254,12 +255,16 @@ function checkBlossoms(placedCol, placedRow) {
     const ck = boardKey(cx, cy);
     if (state.blossoms.has(ck)) continue;
 
-    const flowers = getBlossomFlowers(cx, cy);
-    let claimed = -1;
-    for (const f of flowers) {
-      if (!state.tokens[f]) { state.tokens[f] = true; claimed = f; break; }
+    const available = [...getBlossomFlowers(cx, cy)].filter(f => !state.tokens[f]);
+    if (available.length === 0) {
+      state.blossoms.set(ck, -1);
+    } else if (available.length === 1) {
+      state.tokens[available[0]] = true;
+      state.blossoms.set(ck, available[0]);
+    } else {
+      state.blossoms.set(ck, -2);  // pending — player must choose
+      state.pendingChoices.push({ key: ck, flowers: available });
     }
-    state.blossoms.set(ck, claimed);
   }
 
   if (state.tokens.every(Boolean)) {
@@ -322,15 +327,46 @@ function placeTile(col, row) {
   updateBounds(col, row);
   checkBlossoms(col, row);
 
-  if (state.phase !== 'won') drawNextTile();
+  if (state.phase !== 'won' && state.pendingChoices.length === 0) drawNextTile();
 
   render();
 
-  if (state.phase !== 'playing') {
+  if (state.phase !== 'playing' && state.pendingChoices.length === 0) {
     setTimeout(showOverlay, 600);
   } else {
     autoPanToTile(col, row);
   }
+}
+
+function claimPendingToken(flowerIdx) {
+  if (state.pendingChoices.length === 0) return;
+  const { key, flowers } = state.pendingChoices[0];
+  if (!flowers.includes(flowerIdx)) return;
+
+  state.tokens[flowerIdx] = true;
+  state.blossoms.set(key, flowerIdx);
+  if (blossomElements.has(key)) {
+    const el = blossomElements.get(key);
+    el.style.setProperty('--blossom-color', FLOWER_COLORS[flowerIdx]);
+    el.classList.remove('pending');
+  }
+
+  state.pendingChoices.shift();
+
+  if (state.tokens.every(Boolean)) {
+    state.score = 8 + state.deck.length;
+    state.phase = 'won';
+    render();
+    setTimeout(showOverlay, 600);
+    return;
+  }
+  state.score = state.tokens.filter(Boolean).length;
+
+  if (state.pendingChoices.length > 0) { render(); return; }
+
+  drawNextTile();
+  render();
+  if (state.phase !== 'playing') setTimeout(showOverlay, 600);
 }
 
 function initGame() {
@@ -351,6 +387,7 @@ function initGame() {
   state.phase           = 'playing';
   state.score           = 0;
   state.blossoms        = new Map();
+  state.pendingChoices  = [];
 
   // Place first tile at origin with rotation 0
   const firstIdx = state.deck.shift();
@@ -530,8 +567,11 @@ function renderBlossomLayer() {
     const x = tileX(cx), y = tileY(cy);
     if (!blossomElements.has(key)) {
       const el = document.createElement('div');
-      el.className = 'blossom-dot new';
-      const color = flowerIdx >= 0 ? FLOWER_COLORS[flowerIdx] : 'rgba(255,255,255,0.4)';
+      const pending = flowerIdx === -2;
+      el.className = 'blossom-dot new' + (pending ? ' pending' : '');
+      const color = flowerIdx >= 0 ? FLOWER_COLORS[flowerIdx]
+                  : pending        ? 'rgba(0,245,255,0.8)'
+                  :                  'rgba(255,255,255,0.35)';
       el.style.setProperty('--blossom-color', color);
       el.style.left = x + 'px';
       el.style.top  = y + 'px';
@@ -551,6 +591,11 @@ function renderCurrentTile() {
   const label     = document.getElementById('current-tile-label');
   container.innerHTML = '';
 
+  if (state.pendingChoices.length > 0) {
+    label.textContent = 'Pick a token';
+    return;
+  }
+
   if (state.currentTile === null) {
     container.textContent = '—';
     label.textContent = 'Next';
@@ -567,8 +612,10 @@ function renderCurrentTile() {
 }
 
 function renderTokenRack() {
-  const rack = document.getElementById('token-rack');
+  const rack     = document.getElementById('token-rack');
   const existing = rack.children;
+  const choices  = state.pendingChoices.length > 0 ? state.pendingChoices[0].flowers : null;
+
   for (let i = 0; i < 8; i++) {
     let token = existing[i];
     if (!token) {
@@ -579,7 +626,9 @@ function renderTokenRack() {
       token.title = FLOWER_NAMES[i];
       rack.appendChild(token);
     }
-    token.classList.toggle('placed', state.tokens[i]);
+    token.classList.toggle('placed',       state.tokens[i]);
+    token.classList.toggle('choosable',    !!choices && choices.includes(i));
+    token.classList.toggle('not-choosable',!!choices && !choices.includes(i));
   }
 }
 
@@ -695,6 +744,22 @@ function initInteraction() {
   vp.addEventListener('mousedown', e => onPointerDown(e.clientX, e.clientY, e.target));
   window.addEventListener('mousemove', e => onPointerMove(e.clientX, e.clientY));
   window.addEventListener('mouseup', () => onPointerUp());
+
+  // Token rack — claim pending token on click/tap
+  const rack = document.getElementById('token-rack');
+  rack.addEventListener('click', e => {
+    const token = e.target.closest('.token');
+    if (!token || !token.classList.contains('choosable')) return;
+    claimPendingToken([...rack.children].indexOf(token));
+  });
+  rack.addEventListener('touchend', e => {
+    e.preventDefault();
+    const token = document.elementFromPoint(
+      e.changedTouches[0].clientX, e.changedTouches[0].clientY
+    )?.closest('.token');
+    if (!token || !token.classList.contains('choosable')) return;
+    claimPendingToken([...rack.children].indexOf(token));
+  }, { passive: false });
 
   // Tap on current tile preview → rotate
   document.getElementById('current-tile-area').addEventListener('click', rotateCurrentTile);
