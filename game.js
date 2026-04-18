@@ -78,44 +78,63 @@ const TRACE_DIRS = [
 
 // ─── High scores ───────────────────────────────────────────────────────────────
 
-const HS_KEY = 'agr-highscores';
-const HS_MAX = 10;
+// Set SCORES_API to your deployed Cloudflare Worker URL (see worker/README.md).
+// Leave empty to use localStorage-only (scores are per-device).
+const SCORES_API = 'https://rain-scores.mearkus.workers.dev';
+const HS_KEY     = 'agr-highscores'; // localStorage fallback key
+const HS_MAX     = 10;
 
-function loadScores() {
-  try { return JSON.parse(localStorage.getItem(HS_KEY)) || []; }
-  catch { return []; }
+let cachedScores = [];
+
+async function fetchScores() {
+  if (SCORES_API) {
+    try {
+      const res = await fetch(SCORES_API + '/scores',
+        { signal: AbortSignal.timeout(4000) });
+      if (res.ok) { cachedScores = await res.json(); return; }
+    } catch {}
+  }
+  try { cachedScores = JSON.parse(localStorage.getItem(HS_KEY)) || []; }
+  catch { cachedScores = []; }
 }
 
-// Returns the leaderboard index of the newly saved entry.
-function saveScore(initials, score) {
-  const scores = loadScores();
-  const entry = { initials: initials.toUpperCase().slice(0, 3), score };
-  scores.push(entry);
-  scores.sort((a, b) => b.score - a.score);
-  scores.splice(HS_MAX);
-  localStorage.setItem(HS_KEY, JSON.stringify(scores));
-  return scores.findIndex(s => s.initials === entry.initials && s.score === entry.score);
+async function saveScore(initials, score) {
+  const entry = { initials: initials.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) || '???', score };
+  if (SCORES_API) {
+    try {
+      const res = await fetch(SCORES_API + '/scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.ok) { cachedScores = await res.json(); return; }
+    } catch {}
+  }
+  // localStorage fallback
+  cachedScores = [...cachedScores, entry];
+  cachedScores.sort((a, b) => b.score - a.score);
+  cachedScores.splice(HS_MAX);
+  try { localStorage.setItem(HS_KEY, JSON.stringify(cachedScores)); } catch {}
 }
 
 function qualifiesForLeaderboard(score) {
   if (score <= 0) return false;
-  const scores = loadScores();
-  return scores.length < HS_MAX || score >= scores[scores.length - 1].score;
+  return cachedScores.length < HS_MAX || score >= cachedScores[cachedScores.length - 1].score;
 }
 
 function renderLeaderboard(highlightIdx) {
-  const list   = document.getElementById('score-list');
-  const scores = loadScores();
+  const list = document.getElementById('score-list');
   list.innerHTML = '';
-  if (scores.length === 0) {
+  if (cachedScores.length === 0) {
     const li = document.createElement('li');
-    li.className     = 'hs-empty';
-    li.textContent   = 'No scores yet';
+    li.className   = 'hs-empty';
+    li.textContent = 'No scores yet';
     list.appendChild(li);
     return;
   }
-  for (let i = 0; i < scores.length; i++) {
-    const { initials, score } = scores[i];
+  for (let i = 0; i < cachedScores.length; i++) {
+    const { initials, score } = cachedScores[i];
     const li = document.createElement('li');
     if (i === highlightIdx) li.classList.add('hs-highlight');
     li.innerHTML = `<span class="hs-rank">${i + 1}</span>`
@@ -704,7 +723,7 @@ function initInteraction() {
 
 // ─── Overlay ───────────────────────────────────────────────────────────────────
 
-function showOverlay() {
+async function showOverlay() {
   const overlay         = document.getElementById('overlay');
   const title           = document.getElementById('overlay-title');
   const message         = document.getElementById('overlay-message');
@@ -722,19 +741,24 @@ function showOverlay() {
     message.textContent = `${n} of 8 flowers bloomed  ·  Score: ${state.score}`;
   }
 
+  // Show overlay immediately; fetch scores then reveal the right section.
+  initialsSection.classList.add('hidden');
+  leaderboard.classList.add('hidden');
+  overlay.classList.remove('hidden');
+
+  await fetchScores();
+
+  const submitBtn = document.getElementById('initials-submit');
   if (qualifiesForLeaderboard(state.score)) {
     initialsSection.classList.remove('hidden');
-    leaderboard.classList.add('hidden');
+    submitBtn.disabled = false;
     const input = document.getElementById('initials-input');
     input.value = '';
     setTimeout(() => input.focus(), 150);
   } else {
-    initialsSection.classList.add('hidden');
     leaderboard.classList.remove('hidden');
     renderLeaderboard(-1);
   }
-
-  overlay.classList.remove('hidden');
 }
 
 function hideOverlay() {
@@ -754,11 +778,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('help-btn').addEventListener('click', toggleHelp);
   document.getElementById('help-close').addEventListener('click', toggleHelp);
 
-  function submitInitials() {
-    const input = document.getElementById('initials-input');
-    const val   = input.value.trim().toUpperCase();
-    if (val.length === 0) return;
-    const idx = saveScore(val, state.score);
+  async function submitInitials() {
+    const input     = document.getElementById('initials-input');
+    const submitBtn = document.getElementById('initials-submit');
+    const val       = input.value.trim().toUpperCase();
+    if (!val || submitBtn.disabled) return;
+    submitBtn.disabled = true;  // prevent double-submit
+
+    await saveScore(val, state.score);
+    const idx = cachedScores.findIndex(s => s.initials === val && s.score === state.score);
     document.getElementById('initials-section').classList.add('hidden');
     document.getElementById('leaderboard').classList.remove('hidden');
     renderLeaderboard(idx);
