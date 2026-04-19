@@ -483,6 +483,12 @@ button {
   box-shadow: 0 0 20px rgba(0, 245, 255, 0.55);
 }
 
+#initials-submit:disabled {
+  opacity: 0.35;
+  cursor: default;
+  box-shadow: none;
+}
+
 /* ── Leaderboard ───────────────────────────────────────────────────────────── */
 #leaderboard {
   margin: 0 0 16px;
