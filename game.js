@@ -78,39 +78,38 @@ const TRACE_DIRS = [
 
 // ─── High scores ───────────────────────────────────────────────────────────────
 
-// Set SCORES_API to your deployed Cloudflare Worker URL (see worker/README.md).
-// Leave empty to use localStorage-only (scores are per-device).
-const SCORES_API = 'https://rain-scores.mearkus.workers.dev';
-const HS_KEY     = 'agr-highscores'; // localStorage fallback key
-const HS_MAX     = 10;
+const SUPABASE_URL = 'https://vmtnxtmjfsnuyqgtgazz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtdG54dG1qZnNudXlxZ3RnYXp6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMzM3NzksImV4cCI6MjA5MDkwOTc3OX0.mpRZ0osV9jUNCYpuI_mkwBixMOe6_g8_ChP7617d09k';
+const SB_HEADERS   = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+const SCORES_URL   = `${SUPABASE_URL}/rest/v1/rain_scores`;
+const HS_KEY       = 'agr-highscores'; // localStorage fallback key
+const HS_MAX       = 10;
 
 let cachedScores = [];
 
 async function fetchScores() {
-  if (SCORES_API) {
-    try {
-      const res = await fetch(SCORES_API + '/scores',
-        { signal: AbortSignal.timeout(4000) });
-      if (res.ok) { cachedScores = await res.json(); return; }
-    } catch {}
-  }
+  try {
+    const res = await fetch(
+      `${SCORES_URL}?select=initials,score&order=score.desc&limit=${HS_MAX}`,
+      { headers: SB_HEADERS, signal: AbortSignal.timeout(4000) }
+    );
+    if (res.ok) { cachedScores = await res.json(); return; }
+  } catch {}
   try { cachedScores = JSON.parse(localStorage.getItem(HS_KEY)) || []; }
   catch { cachedScores = []; }
 }
 
 async function saveScore(initials, score) {
   const entry = { initials: initials.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) || '???', score };
-  if (SCORES_API) {
-    try {
-      const res = await fetch(SCORES_API + '/scores', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry),
-        signal: AbortSignal.timeout(5000),
-      });
-      if (res.ok) { cachedScores = await res.json(); return; }
-    } catch {}
-  }
+  try {
+    const res = await fetch(SCORES_URL, {
+      method: 'POST',
+      headers: { ...SB_HEADERS, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(entry),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) { await fetchScores(); return; }
+  } catch {}
   // localStorage fallback
   cachedScores = [...cachedScores, entry];
   cachedScores.sort((a, b) => b.score - a.score);
