@@ -78,6 +78,9 @@ const TRACE_DIRS = [
 
 // ─── High scores ───────────────────────────────────────────────────────────────
 
+// SUPABASE_KEY is the public anon key — intentionally client-side visible.
+// Security depends on RLS: anon role has SELECT + INSERT only (no UPDATE/DELETE).
+// If RLS policies change, rotate this key immediately.
 const SUPABASE_URL = 'https://vmtnxtmjfsnuyqgtgazz.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtdG54dG1qZnNudXlxZ3RnYXp6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMzM3NzksImV4cCI6MjA5MDkwOTc3OX0.mpRZ0osV9jUNCYpuI_mkwBixMOe6_g8_ChP7617d09k';
 const SB_HEADERS   = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
@@ -132,13 +135,15 @@ function renderLeaderboard(highlightIdx) {
     list.appendChild(li);
     return;
   }
+  const mk = (cls, text) => {
+    const s = document.createElement('span');
+    s.className = cls; s.textContent = text; return s;
+  };
   for (let i = 0; i < cachedScores.length; i++) {
     const { initials, score } = cachedScores[i];
     const li = document.createElement('li');
     if (i === highlightIdx) li.classList.add('hs-highlight');
-    li.innerHTML = `<span class="hs-rank">${i + 1}</span>`
-                 + `<span class="hs-initials">${initials}</span>`
-                 + `<span class="hs-score">${score}</span>`;
+    li.append(mk('hs-rank', i + 1), mk('hs-initials', initials), mk('hs-score', score));
     list.appendChild(li);
   }
 }
