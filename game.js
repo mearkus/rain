@@ -779,23 +779,30 @@ function initInteraction() {
       touch.pinching = false;
       const t = e.touches[0];
       onPointerDown(t.clientX, t.clientY, document.elementFromPoint(t.clientX, t.clientY));
-    } else if (e.touches.length === 2) {
-      touch.active   = false;
-      touch.pinching = true;
-      const [t0, t1] = [e.touches[0], e.touches[1]];
-      const vpRect   = vp.getBoundingClientRect();
-      touch.startDist  = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
-      touch.startZoom  = zoom;
-      touch.startPanX  = state.panOffset.x;
-      touch.startPanY  = state.panOffset.y;
-      touch.pinchMidX  = (t0.clientX + t1.clientX) / 2 - vpRect.left;
-      touch.pinchMidY  = (t0.clientY + t1.clientY) / 2 - vpRect.top;
+    } else if (e.touches.length >= 2) {
+      initPinch(e.touches[0], e.touches[1]);
     }
   }, { passive: false });
 
+  function initPinch(t0, t1) {
+    const vpRect    = vp.getBoundingClientRect();
+    touch.active    = false;
+    touch.pinching  = true;
+    touch.startDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    touch.startZoom = zoom;
+    touch.startPanX = state.panOffset.x;
+    touch.startPanY = state.panOffset.y;
+    touch.pinchMidX = (t0.clientX + t1.clientX) / 2 - vpRect.left;
+    touch.pinchMidY = (t0.clientY + t1.clientY) / 2 - vpRect.top;
+  }
+
   vp.addEventListener('touchmove', e => {
     e.preventDefault();
-    if (e.touches.length === 2 && touch.pinching) {
+    if (e.touches.length === 2) {
+      // Initialise pinch here as fallback — Android doesn't always fire
+      // the second touchstart before the first touchmove with 2 touches.
+      if (!touch.pinching) initPinch(e.touches[0], e.touches[1]);
+
       const [t0, t1] = [e.touches[0], e.touches[1]];
       const vpRect   = vp.getBoundingClientRect();
       const dist     = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
@@ -803,7 +810,6 @@ function initInteraction() {
       const midY     = (t0.clientY + t1.clientY) / 2 - vpRect.top;
       const newZoom  = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, touch.startZoom * dist / touch.startDist));
 
-      // Zoom around initial pinch point, also allow mid-point pan
       const bx = (touch.pinchMidX - touch.startPanX) / touch.startZoom;
       const by = (touch.pinchMidY - touch.startPanY) / touch.startZoom;
       zoom = newZoom;
@@ -811,8 +817,7 @@ function initInteraction() {
       state.panOffset.y = touch.pinchMidY - by * zoom + (midY - touch.pinchMidY);
       applyPan(false);
     } else if (e.touches.length === 1 && !touch.pinching) {
-      const t = e.touches[0];
-      onPointerMove(t.clientX, t.clientY);
+      onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
     }
   }, { passive: false });
 
@@ -821,6 +826,8 @@ function initInteraction() {
     if (e.touches.length === 0) { touch.pinching = false; onPointerUp(); }
     else if (e.touches.length === 1 && touch.pinching) { touch.pinching = false; }
   }, { passive: false });
+
+  vp.addEventListener('touchcancel', () => { touch.active = false; touch.pinching = false; });
 
   // Mouse wheel zoom (desktop)
   vp.addEventListener('wheel', e => {
