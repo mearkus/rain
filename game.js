@@ -165,6 +165,10 @@ const state = {
   pendingChoices:  [],         // [{key, flowers:[flowerIdx,...]}] awaiting player pick
 };
 
+// ─── View state (not game state) ──────────────────────────────────────────────
+
+let zoom = 1;
+
 // ─── DOM caches ────────────────────────────────────────────────────────────────
 
 const tileElements    = new Map();
@@ -408,6 +412,7 @@ function initGame() {
   state.boardBounds     = { minCol: 0, maxCol: 0, minRow: 0, maxRow: 0 };
   state.panOffset       = { x: 0, y: 0 };
   state.phase           = 'playing';
+  zoom                  = 1;
   state.score           = 0;
   state.blossoms        = new Map();
   state.pendingChoices  = [];
@@ -675,8 +680,9 @@ function render() {
 function applyPan(animate) {
   const board = document.getElementById('board');
   if (!board) return;
-  board.style.transition = animate ? 'transform 0.3s ease-out' : 'none';
-  board.style.transform  = `translate(${state.panOffset.x}px, ${state.panOffset.y}px)`;
+  board.style.transition   = animate ? 'transform 0.3s ease-out' : 'none';
+  board.style.transformOrigin = '0 0';
+  board.style.transform    = `translate(${state.panOffset.x}px, ${state.panOffset.y}px) scale(${zoom})`;
 }
 
 function centerBoard() {
@@ -684,15 +690,15 @@ function centerBoard() {
   const b  = state.boardBounds;
   const bw = (b.maxCol - b.minCol + 1) * TILE_SIZE + 2 * BOARD_PADDING;
   const bh = (b.maxRow - b.minRow + 1) * TILE_SIZE + 2 * BOARD_PADDING;
-  state.panOffset.x = Math.round((vp.clientWidth  - bw) / 2);
-  state.panOffset.y = Math.round((vp.clientHeight - bh) / 2);
+  state.panOffset.x = Math.round((vp.clientWidth  - bw * zoom) / 2);
+  state.panOffset.y = Math.round((vp.clientHeight - bh * zoom) / 2);
   applyPan(true);
 }
 
 function autoPanToTile(col, row) {
   const vp = document.getElementById('board-viewport');
-  state.panOffset.x = Math.round(vp.clientWidth  / 2 - tileX(col) - TILE_SIZE / 2);
-  state.panOffset.y = Math.round(vp.clientHeight / 2 - tileY(row) - TILE_SIZE / 2);
+  state.panOffset.x = Math.round(vp.clientWidth  / 2 - (tileX(col) + TILE_SIZE / 2) * zoom);
+  state.panOffset.y = Math.round(vp.clientHeight / 2 - (tileY(row) + TILE_SIZE / 2) * zoom);
   applyPan(true);
 }
 
@@ -702,6 +708,9 @@ const touch = {
   active: false, startX: 0, startY: 0,
   startPanX: 0, startPanY: 0,
   startTime: 0, isPanning: false, targetEl: null,
+  // pinch state
+  pinching: false, startDist: 0, startZoom: 1,
+  pinchMidX: 0, pinchMidY: 0,
 };
 
 const PAN_THRESHOLD    = 8;
@@ -752,17 +761,76 @@ function handleTap(el) {
 function initInteraction() {
   const vp = document.getElementById('board-viewport');
 
+  const ZOOM_MIN = 0.4, ZOOM_MAX = 3;
+
+  function applyZoomAt(newZoom, vpX, vpY) {
+    newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+    const bx = (vpX - state.panOffset.x) / zoom;
+    const by = (vpY - state.panOffset.y) / zoom;
+    zoom = newZoom;
+    state.panOffset.x = vpX - bx * zoom;
+    state.panOffset.y = vpY - by * zoom;
+    applyPan(false);
+  }
+
   vp.addEventListener('touchstart', e => {
     e.preventDefault();
-    const t = e.touches[0];
-    onPointerDown(t.clientX, t.clientY, document.elementFromPoint(t.clientX, t.clientY));
+    if (e.touches.length === 1) {
+      touch.pinching = false;
+      const t = e.touches[0];
+      onPointerDown(t.clientX, t.clientY, document.elementFromPoint(t.clientX, t.clientY));
+    } else if (e.touches.length === 2) {
+      touch.active   = false;
+      touch.pinching = true;
+      const [t0, t1] = [e.touches[0], e.touches[1]];
+      const vpRect   = vp.getBoundingClientRect();
+      touch.startDist  = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+      touch.startZoom  = zoom;
+      touch.startPanX  = state.panOffset.x;
+      touch.startPanY  = state.panOffset.y;
+      touch.pinchMidX  = (t0.clientX + t1.clientX) / 2 - vpRect.left;
+      touch.pinchMidY  = (t0.clientY + t1.clientY) / 2 - vpRect.top;
+    }
   }, { passive: false });
+
   vp.addEventListener('touchmove', e => {
     e.preventDefault();
-    const t = e.touches[0];
-    onPointerMove(t.clientX, t.clientY);
+    if (e.touches.length === 2 && touch.pinching) {
+      const [t0, t1] = [e.touches[0], e.touches[1]];
+      const vpRect   = vp.getBoundingClientRect();
+      const dist     = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+      const midX     = (t0.clientX + t1.clientX) / 2 - vpRect.left;
+      const midY     = (t0.clientY + t1.clientY) / 2 - vpRect.top;
+      const newZoom  = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, touch.startZoom * dist / touch.startDist));
+
+      // Zoom around initial pinch point, also allow mid-point pan
+      const bx = (touch.pinchMidX - touch.startPanX) / touch.startZoom;
+      const by = (touch.pinchMidY - touch.startPanY) / touch.startZoom;
+      zoom = newZoom;
+      state.panOffset.x = touch.pinchMidX - bx * zoom + (midX - touch.pinchMidX);
+      state.panOffset.y = touch.pinchMidY - by * zoom + (midY - touch.pinchMidY);
+      applyPan(false);
+    } else if (e.touches.length === 1 && !touch.pinching) {
+      const t = e.touches[0];
+      onPointerMove(t.clientX, t.clientY);
+    }
   }, { passive: false });
-  vp.addEventListener('touchend', e => { e.preventDefault(); onPointerUp(); }, { passive: false });
+
+  vp.addEventListener('touchend', e => {
+    e.preventDefault();
+    if (e.touches.length === 0) { touch.pinching = false; onPointerUp(); }
+    else if (e.touches.length === 1 && touch.pinching) { touch.pinching = false; }
+  }, { passive: false });
+
+  // Mouse wheel zoom (desktop)
+  vp.addEventListener('wheel', e => {
+    e.preventDefault();
+    const vpRect  = vp.getBoundingClientRect();
+    const vpX     = e.clientX - vpRect.left;
+    const vpY     = e.clientY - vpRect.top;
+    const factor  = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    applyZoomAt(zoom * factor, vpX, vpY);
+  }, { passive: false });
 
   vp.addEventListener('mousedown', e => onPointerDown(e.clientX, e.clientY, e.target));
   window.addEventListener('mousemove', e => onPointerMove(e.clientX, e.clientY));
