@@ -1,7 +1,9 @@
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TILE_SIZE    = 72;
-const BOARD_PADDING = 72;
+// Read from CSS so JS always matches the responsive --tile-size custom property.
+// Initialised in DOMContentLoaded before first render.
+let TILE_SIZE    = 72;
+let BOARD_PADDING = 72;
 
 // 28 tiles, each [top, right, bottom, left], flowers 0-7.
 // Every tile has 4 UNIQUE edge values.
@@ -919,6 +921,10 @@ function toggleHelp() {
 // ─── Entry point ───────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Sync JS tile size with the CSS custom property (responsive: 72→80→88px).
+  TILE_SIZE    = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tile-size')) || 72;
+  BOARD_PADDING = TILE_SIZE;
+
   initInteraction();
   document.getElementById('new-game-btn').addEventListener('click', initGame);
   document.getElementById('play-again-btn').addEventListener('click', initGame);
