@@ -1,7 +1,9 @@
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TILE_SIZE    = 72;
-const BOARD_PADDING = 72;
+// Read from CSS so JS always matches the responsive --tile-size custom property.
+// Initialised in DOMContentLoaded before first render.
+let TILE_SIZE    = 72;
+let BOARD_PADDING = 72;
 
 // 28 tiles, each [top, right, bottom, left], flowers 0-7.
 // Every tile has 4 UNIQUE edge values.
@@ -763,6 +765,10 @@ function initInteraction() {
 
   const ZOOM_MIN = 0.4, ZOOM_MAX = 3;
 
+  // ── Pointer Events (handles mouse, touch, and stylus uniformly) ──────────────
+  // Track active pointers by id so we can detect pinch with any 2 fingers.
+  const ptrs = new Map(); // pointerId → {x, y}
+
   function applyZoomAt(newZoom, vpX, vpY) {
     newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
     const bx = (vpX - state.panOffset.x) / zoom;
@@ -773,75 +779,84 @@ function initInteraction() {
     applyPan(false);
   }
 
-  vp.addEventListener('touchstart', e => {
-    e.preventDefault();
-    if (e.touches.length === 1) {
-      touch.pinching = false;
-      const t = e.touches[0];
-      onPointerDown(t.clientX, t.clientY, document.elementFromPoint(t.clientX, t.clientY));
-    } else if (e.touches.length >= 2) {
-      initPinch(e.touches[0], e.touches[1]);
-    }
-  }, { passive: false });
-
-  function initPinch(t0, t1) {
-    const vpRect    = vp.getBoundingClientRect();
-    touch.active    = false;
-    touch.pinching  = true;
-    touch.startDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
-    touch.startZoom = zoom;
-    touch.startPanX = state.panOffset.x;
-    touch.startPanY = state.panOffset.y;
-    touch.pinchMidX = (t0.clientX + t1.clientX) / 2 - vpRect.left;
-    touch.pinchMidY = (t0.clientY + t1.clientY) / 2 - vpRect.top;
+  function pinchState() {
+    const [a, b] = [...ptrs.values()];
+    const vpRect = vp.getBoundingClientRect();
+    return {
+      dist: Math.hypot(b.x - a.x, b.y - a.y),
+      midX: (a.x + b.x) / 2 - vpRect.left,
+      midY: (a.y + b.y) / 2 - vpRect.top,
+    };
   }
 
-  vp.addEventListener('touchmove', e => {
-    e.preventDefault();
-    if (e.touches.length === 2) {
-      // Initialise pinch here as fallback — Android doesn't always fire
-      // the second touchstart before the first touchmove with 2 touches.
-      if (!touch.pinching) initPinch(e.touches[0], e.touches[1]);
+  vp.addEventListener('pointerdown', e => {
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    vp.setPointerCapture(e.pointerId);
 
-      const [t0, t1] = [e.touches[0], e.touches[1]];
-      const vpRect   = vp.getBoundingClientRect();
-      const dist     = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
-      const midX     = (t0.clientX + t1.clientX) / 2 - vpRect.left;
-      const midY     = (t0.clientY + t1.clientY) / 2 - vpRect.top;
-      const newZoom  = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, touch.startZoom * dist / touch.startDist));
+    if (ptrs.size === 1) {
+      touch.pinching = false;
+      onPointerDown(e.clientX, e.clientY, document.elementFromPoint(e.clientX, e.clientY));
+    } else if (ptrs.size === 2) {
+      touch.active = false;
+      const p = pinchState();
+      touch.pinching  = true;
+      touch.startDist = p.dist;
+      touch.startZoom = zoom;
+      touch.startPanX = state.panOffset.x;
+      touch.startPanY = state.panOffset.y;
+      touch.pinchMidX = p.midX;
+      touch.pinchMidY = p.midY;
+    }
+  });
 
+  vp.addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (ptrs.size >= 2) {
+      const p = pinchState();
+      if (!touch.pinching) {
+        touch.active    = false;
+        touch.pinching  = true;
+        touch.startDist = p.dist;
+        touch.startZoom = zoom;
+        touch.startPanX = state.panOffset.x;
+        touch.startPanY = state.panOffset.y;
+        touch.pinchMidX = p.midX;
+        touch.pinchMidY = p.midY;
+        return;
+      }
+      const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX,
+        touch.startZoom * p.dist / (touch.startDist || 1)));
       const bx = (touch.pinchMidX - touch.startPanX) / touch.startZoom;
       const by = (touch.pinchMidY - touch.startPanY) / touch.startZoom;
       zoom = newZoom;
-      state.panOffset.x = touch.pinchMidX - bx * zoom + (midX - touch.pinchMidX);
-      state.panOffset.y = touch.pinchMidY - by * zoom + (midY - touch.pinchMidY);
+      state.panOffset.x = touch.pinchMidX - bx * zoom + (p.midX - touch.pinchMidX);
+      state.panOffset.y = touch.pinchMidY - by * zoom + (p.midY - touch.pinchMidY);
       applyPan(false);
-    } else if (e.touches.length === 1 && !touch.pinching) {
-      onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
+    } else if (!touch.pinching) {
+      onPointerMove(e.clientX, e.clientY);
     }
-  }, { passive: false });
+  });
 
-  vp.addEventListener('touchend', e => {
-    e.preventDefault();
-    if (e.touches.length === 0) { touch.pinching = false; onPointerUp(); }
-    else if (e.touches.length === 1 && touch.pinching) { touch.pinching = false; }
-  }, { passive: false });
+  vp.addEventListener('pointerup', e => {
+    ptrs.delete(e.pointerId);
+    if (ptrs.size === 0) { touch.pinching = false; onPointerUp(); }
+    else if (ptrs.size === 1) touch.pinching = false;
+  });
 
-  vp.addEventListener('touchcancel', () => { touch.active = false; touch.pinching = false; });
+  vp.addEventListener('pointercancel', e => {
+    ptrs.delete(e.pointerId);
+    if (ptrs.size === 0) { touch.active = false; touch.pinching = false; }
+  });
 
   // Mouse wheel zoom (desktop)
   vp.addEventListener('wheel', e => {
     e.preventDefault();
-    const vpRect  = vp.getBoundingClientRect();
-    const vpX     = e.clientX - vpRect.left;
-    const vpY     = e.clientY - vpRect.top;
-    const factor  = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-    applyZoomAt(zoom * factor, vpX, vpY);
+    const vpRect = vp.getBoundingClientRect();
+    applyZoomAt(zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12),
+      e.clientX - vpRect.left, e.clientY - vpRect.top);
   }, { passive: false });
-
-  vp.addEventListener('mousedown', e => onPointerDown(e.clientX, e.clientY, e.target));
-  window.addEventListener('mousemove', e => onPointerMove(e.clientX, e.clientY));
-  window.addEventListener('mouseup', () => onPointerUp());
 
   // Token rack — claim pending token on click/tap
   const rack = document.getElementById('token-rack');
@@ -916,12 +931,46 @@ function toggleHelp() {
   document.getElementById('help-modal').classList.toggle('hidden');
 }
 
+async function showScores() {
+  const modal = document.getElementById('scores-modal');
+  const list  = document.getElementById('scores-modal-list');
+  list.innerHTML = '';
+  modal.classList.remove('hidden');
+
+  await fetchScores();
+
+  list.innerHTML = '';
+  if (cachedScores.length === 0) {
+    const li = document.createElement('li');
+    li.className   = 'hs-empty';
+    li.textContent = 'No scores yet';
+    list.appendChild(li);
+    return;
+  }
+  const mk = (cls, text) => {
+    const s = document.createElement('span'); s.className = cls; s.textContent = text; return s;
+  };
+  cachedScores.forEach(({ initials, score }, i) => {
+    const li = document.createElement('li');
+    li.append(mk('hs-rank', i + 1), mk('hs-initials', initials), mk('hs-score', score));
+    list.appendChild(li);
+  });
+}
+
 // ─── Entry point ───────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Sync JS tile size with the CSS custom property (responsive: 72→80→88px).
+  TILE_SIZE    = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tile-size')) || 72;
+  BOARD_PADDING = TILE_SIZE;
+
   initInteraction();
   document.getElementById('new-game-btn').addEventListener('click', initGame);
   document.getElementById('play-again-btn').addEventListener('click', initGame);
+  document.getElementById('scores-btn').addEventListener('click', showScores);
+  document.getElementById('scores-close').addEventListener('click', () =>
+    document.getElementById('scores-modal').classList.add('hidden')
+  );
   document.getElementById('help-btn').addEventListener('click', toggleHelp);
   document.getElementById('help-close').addEventListener('click', toggleHelp);
 
