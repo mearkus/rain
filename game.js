@@ -918,6 +918,32 @@ function toggleHelp() {
   document.getElementById('help-modal').classList.toggle('hidden');
 }
 
+async function showScores() {
+  const modal = document.getElementById('scores-modal');
+  const list  = document.getElementById('scores-modal-list');
+  list.innerHTML = '';
+  modal.classList.remove('hidden');
+
+  await fetchScores();
+
+  list.innerHTML = '';
+  if (cachedScores.length === 0) {
+    const li = document.createElement('li');
+    li.className   = 'hs-empty';
+    li.textContent = 'No scores yet';
+    list.appendChild(li);
+    return;
+  }
+  const mk = (cls, text) => {
+    const s = document.createElement('span'); s.className = cls; s.textContent = text; return s;
+  };
+  cachedScores.forEach(({ initials, score }, i) => {
+    const li = document.createElement('li');
+    li.append(mk('hs-rank', i + 1), mk('hs-initials', initials), mk('hs-score', score));
+    list.appendChild(li);
+  });
+}
+
 // ─── Entry point ───────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -928,6 +954,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initInteraction();
   document.getElementById('new-game-btn').addEventListener('click', initGame);
   document.getElementById('play-again-btn').addEventListener('click', initGame);
+  document.getElementById('scores-btn').addEventListener('click', showScores);
+  document.getElementById('scores-close').addEventListener('click', () =>
+    document.getElementById('scores-modal').classList.add('hidden')
+  );
   document.getElementById('help-btn').addEventListener('click', toggleHelp);
   document.getElementById('help-close').addEventListener('click', toggleHelp);
 

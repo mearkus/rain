@@ -110,7 +110,7 @@ button {
   align-items: center;
 }
 
-#help-btn, #new-game-btn {
+#scores-btn, #help-btn, #new-game-btn {
   height: 30px;
   padding: 0 10px;
   border-radius: var(--radius-sm);
@@ -124,6 +124,13 @@ button {
   text-shadow: 0 0 6px var(--neon-cyan);
   box-shadow: 0 0 6px rgba(0, 245, 255, 0.15), inset 0 0 6px rgba(0, 245, 255, 0.05);
   transition: box-shadow 0.15s, background 0.15s;
+}
+
+#scores-btn {
+  color: var(--neon-yellow);
+  border-color: var(--neon-yellow);
+  text-shadow: 0 0 8px var(--neon-yellow);
+  box-shadow: 0 0 6px rgba(255, 230, 0, 0.2);
 }
 
 #help-btn {
@@ -569,6 +576,70 @@ button {
 #play-again-btn:active {
   background: rgba(0, 245, 255, 0.12);
   box-shadow: 0 0 24px rgba(0, 245, 255, 0.6);
+}
+
+/* ── Help modal ────────────────────────────────────────────────────────────── */
+/* ── Scores modal ──────────────────────────────────────────────────────────── */
+#scores-modal {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(6px);
+}
+
+#scores-modal.hidden { display: none; }
+
+#scores-content {
+  background: var(--card-bg);
+  border: 1px solid var(--neon-cyan);
+  border-radius: var(--radius-md);
+  padding: 28px 24px;
+  max-width: 340px;
+  width: 92%;
+  box-shadow:
+    0 0 24px rgba(0, 245, 255, 0.15),
+    inset 0 0 16px rgba(0, 245, 255, 0.04);
+}
+
+#scores-content h2 {
+  margin: 0 0 16px;
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--neon-cyan);
+  text-shadow: 0 0 10px var(--neon-cyan);
+}
+
+#scores-modal-list {
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+#scores-close {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--neon-cyan);
+  color: var(--neon-cyan);
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-shadow: 0 0 6px var(--neon-cyan);
+  box-shadow: 0 0 8px rgba(0, 245, 255, 0.2);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+#scores-close:active {
+  background: rgba(0, 245, 255, 0.12);
+  box-shadow: 0 0 18px rgba(0, 245, 255, 0.5);
 }
 
 /* ── Help modal ────────────────────────────────────────────────────────────── */
